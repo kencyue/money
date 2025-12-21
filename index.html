@@ -10,7 +10,6 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@700&display=swap');
         
-        :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
         body { 
             font-family: 'Noto Sans TC', sans-serif; 
             -webkit-tap-highlight-color: transparent; 
@@ -21,7 +20,6 @@
         .num-font { font-family: 'JetBrains Mono', monospace; }
         .glass-effect { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
         
-        /* 核心版型：固定頭尾，中間捲動 */
         .app-container { height: 100vh; height: -webkit-fill-available; display: flex; flex-direction: column; }
         .content-area { flex: 1; overflow-y: auto; padding-bottom: 80px; }
         
@@ -88,12 +86,13 @@
         state: {
             user: null, activeTab: 'home', transactions: [], categories: [],
             homeStep: 1, amount: '0', note: '', type: 'expense',
-            selectedMainCat: null, statsType: 'expense', isAdding: false
+            selectedMainCat: null, statsType: 'expense', isAdding: false, editingCatId: null
         },
 
         switchTab(tab) {
             this.state.activeTab = tab;
             this.state.isAdding = false;
+            this.state.editingCatId = null;
             this.render();
         },
 
@@ -234,7 +233,7 @@
                 <div class="p-5 animate-up">
                     <div class="flex justify-between items-center mb-5">
                         <h2 class="text-lg font-black text-slate-800">分類管理</h2>
-                        <button onclick="window.app.state.isAdding=true; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><i data-lucide="plus" class="w-5 h-5"></i></button>
+                        <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><i data-lucide="plus" class="w-5 h-5"></i></button>
                     </div>
                     ${s.isAdding ? `<div class="bg-white p-5 rounded-[2rem] shadow-xl border border-indigo-50 mb-6 space-y-4 animate-up">
                         <div class="flex gap-3"><input id="new-cat-icon" placeholder="圖示" class="w-16 bg-slate-50 p-3 rounded-xl text-center text-xl" maxlength="2"/><input id="new-cat-name" placeholder="名稱" class="flex-1 bg-slate-50 p-3 rounded-xl text-xs font-bold"/></div>
@@ -244,23 +243,41 @@
                     </div>` : ''}
                     <div class="space-y-2">
                         ${s.categories.map(c => `
-                            <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-50">
+                            <div onclick="window.app.editCat('${c.id}')" class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-50 cursor-pointer active:scale-[0.98] transition">
                                 <div class="flex items-center gap-4"><span class="text-2xl">${c.icon}</span><p class="font-bold text-sm text-slate-700">${c.name} <span class="text-[8px] px-1.5 py-0.5 rounded ${c.type==='income'?'bg-emerald-50 text-emerald-600':'bg-rose-50 text-rose-600'}">${c.type==='income'?'收':'支'}</span></p></div>
-                                <button onclick="window.app.deleteCat('${c.id}')" class="text-slate-200 hover:text-rose-400 p-2 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                <button onclick="event.stopPropagation(); window.app.deleteCat('${c.id}')" class="text-slate-200 hover:text-rose-400 p-2 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                             </div>`).join('')}
                     </div>
                 </div>`;
+
+            if (s.editingCatId) {
+                const cat = s.categories.find(c => c.id === s.editingCatId);
+                if (cat) {
+                    document.getElementById('new-cat-icon').value = cat.icon;
+                    document.getElementById('new-cat-name').value = cat.name;
+                    document.getElementById('new-cat-type').value = cat.type;
+                    document.getElementById('new-cat-subs').value = cat.subCategories.join(',');
+                }
+            }
+        },
+
+        editCat(catId) {
+            this.state.isAdding = true;
+            this.state.editingCatId = catId;
+            this.render();
         },
 
         async saveCategory() {
             const name = document.getElementById('new-cat-name').value, icon = document.getElementById('new-cat-icon').value || '📁';
             const subs = document.getElementById('new-cat-subs').value, type = document.getElementById('new-cat-type').value;
             if (!name) return alert('必填名稱');
-            const id = 'cat_' + Date.now();
+            
+            const id = this.state.editingCatId || ('cat_' + Date.now());
             await setDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id), {
                 id, name, type, icon, subCategories: subs.split(/[,，]/).map(s => s.trim()).filter(Boolean)
             });
             this.state.isAdding = false;
+            this.state.editingCatId = null;
         },
 
         async deleteCat(id) { if (confirm('刪除分類？')) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id)); },
