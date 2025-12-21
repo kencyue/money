@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>口袋記帳 Pro - 專業版</title>
+    <title>口袋記帳 Pro - 專業管理版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -21,11 +21,10 @@
 
     <div id="login-screen" class="fixed inset-0 bg-indigo-950 z-[200] flex flex-col items-center justify-center p-8 text-white">
         <div class="bg-white/10 p-8 rounded-[3rem] mb-6 shadow-2xl animate-pulse"><i data-lucide="shield-check" class="w-16 h-16 text-indigo-300"></i></div>
-        <h1 class="text-3xl font-black mb-10">私人財務系統</h1>
-        <button id="google-login-btn" class="w-full max-w-xs bg-white text-indigo-900 font-black py-4 rounded-2xl flex items-center justify-center gap-3">
+        <h1 class="text-3xl font-black mb-10 text-center">私人財務系統<br><span class="text-indigo-400 text-lg uppercase tracking-widest font-bold">Authorized Only</span></h1>
+        <button id="google-login-btn" class="w-full max-w-xs bg-white text-indigo-900 font-black py-4 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition">
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5"> 管理員登入
         </button>
-        <p id="auth-error-msg" class="mt-4 text-rose-400 text-xs hidden font-bold"></p>
     </div>
 
     <div id="app-content" class="max-w-md mx-auto h-screen flex flex-col hidden bg-slate-50 relative shadow-2xl overflow-hidden">
@@ -69,22 +68,20 @@
         const ALLOWED_USER = "jingsyuan@gmail.com";
         const appId = 'pocket-account-pro-v2';
 
-        // 用於手動銷毀監聽
-        let unsubTransactions = null;
-        let unsubCategories = null;
+        let unsubTx = null;
+        let unsubCat = null;
 
         window.app = {
             state: {
                 user: null, activeTab: 'home', transactions: [], categories: [],
                 homeStep: 1, amount: '0', note: '', type: 'expense',
                 selectedMainCat: null, statsType: 'expense', 
-                isAdding: false, editingCatId: null // 用於追蹤編輯狀態
+                isAdding: false, editingCatId: null
             },
 
             switchTab(tab) {
                 this.state.activeTab = tab;
                 this.state.isAdding = false;
-                this.state.editingCatId = null;
                 this.render();
             },
 
@@ -97,33 +94,49 @@
                 this.render();
             },
 
-            selectCat(catJson) {
-                this.state.selectedMainCat = catJson;
-                this.render();
-            },
-
             async saveRecord(sub) {
                 const s = this.state;
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 await addDoc(collection(db, 'artifacts', appId, 'users', s.user.uid, 'transactions'), {
                     amount: parseFloat(s.amount), note: s.note,
                     mainCatId: s.selectedMainCat.id, mainCatName: s.selectedMainCat.name,
-                    subCat: sub, type: s.type, timestamp: Date.now(),
-                    dateString: new Date().toLocaleDateString('zh-TW')
+                    subCat: sub, type: s.type, timestamp: now.getTime(),
+                    dateString: now.toLocaleDateString('zh-TW'),
+                    timeString: timeStr
                 });
                 s.amount = '0'; s.note = ''; s.homeStep = 1; s.selectedMainCat = null;
                 this.switchTab('history');
             },
 
-            // --- 編輯功能入口 ---
-            editCat(cat) {
-                this.state.isAdding = true;
-                this.state.editingCatId = cat.id;
-                this.render();
-                // 填充數據
-                document.getElementById('new-cat-icon').value = cat.icon;
-                document.getElementById('new-cat-name').value = cat.name;
-                document.getElementById('new-cat-type').value = cat.type;
-                document.getElementById('new-cat-subs').value = cat.subCategories.join(',');
+            // Excel (CSV) 匯出功能
+            exportToExcel() {
+                const s = this.state;
+                if (s.transactions.length === 0) return alert('目前沒有帳目可匯出');
+
+                const headers = ['日期', '時間', '類型', '主類別', '子類別', '金額', '備註'];
+                const rows = s.transactions.map(t => [
+                    t.dateString,
+                    t.timeString || '',
+                    t.type === 'income' ? '收入' : '支出',
+                    t.mainCatName,
+                    t.subCat,
+                    t.amount,
+                    t.note || ''
+                ]);
+
+                // 組合 CSV 內容並加入 BOM 解決中文亂碼
+                let csvContent = '\uFEFF' + headers.join(',') + '\n';
+                rows.forEach(row => { csvContent += row.join(',') + '\n'; });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `口袋記帳_匯出_${new Date().toLocaleDateString()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             },
 
             async saveCategory() {
@@ -132,32 +145,21 @@
                 const subs = document.getElementById('new-cat-subs').value;
                 const type = document.getElementById('new-cat-type').value;
                 if (!name) return alert('請輸入名稱');
-                
                 const id = this.state.editingCatId || ('cat_' + Date.now());
                 await setDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id), {
                     id, name, type, icon,
                     subCategories: subs.split(/[,，]/).map(s => s.trim()).filter(Boolean)
                 });
-                this.state.isAdding = false;
-                this.state.editingCatId = null;
+                this.state.isAdding = false; this.state.editingCatId = null;
                 this.render();
             },
 
-            async deleteCat(id) {
-                event.stopPropagation(); // 防止觸發編輯按鈕
-                if (confirm('確定刪除？')) {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id));
-                }
-            },
-
-            async deleteTx(id) {
-                if (confirm('確定刪除此帳目？')) {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'transactions', id));
-                }
-            },
+            async deleteCat(id) { event.stopPropagation(); if (confirm('確定刪除類別？')) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id)); },
+            async deleteTx(id) { if (confirm('確定刪除此帳目？')) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'transactions', id)); },
 
             render() {
                 const main = document.getElementById('main-view');
+                if(!main) return;
                 const s = this.state;
                 document.querySelectorAll('.nav-btn').forEach(b => {
                     const active = b.dataset.tab === s.activeTab;
@@ -195,26 +197,42 @@
                     container.innerHTML = `
                         <div class="p-6 animate-slide">
                             <button onclick="window.app.state.homeStep=1; window.app.render();" class="flex items-center gap-2 text-indigo-600 font-bold mb-6"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回金額</button>
-                            <div class="grid grid-cols-3 gap-3 mb-6">
+                            <div class="grid grid-cols-3 gap-3">
                                 ${filteredCats.map(c => `<button onclick='window.app.selectCat(${JSON.stringify(c)})' class="p-4 rounded-3xl border-2 transition flex flex-col items-center gap-1 ${s.selectedMainCat?.id===c.id?'border-indigo-600 bg-indigo-50':'border-transparent bg-white shadow-sm'}"><span class="text-3xl">${c.icon}</span><span class="text-[10px] font-bold text-slate-500">${c.name}</span></button>`).join('')}
                             </div>
-                            ${s.selectedMainCat ? `
-                                <div class="bg-slate-900 p-6 rounded-[2.5rem] shadow-xl animate-slide"><div class="grid grid-cols-2 gap-2">${s.selectedMainCat.subCategories.map(sub=>`<button onclick="window.app.saveRecord('${sub}')" class="py-3 bg-white/10 text-white rounded-xl font-bold text-xs hover:bg-white hover:text-slate-900 transition">${sub}</button>`).join('')}</div></div>` : ''}
+                            ${s.selectedMainCat ? `<div class="mt-6 bg-slate-900 p-6 rounded-[2.5rem] animate-slide"><div class="grid grid-cols-2 gap-2">${s.selectedMainCat.subCategories.map(sub=>`<button onclick="window.app.saveRecord('${sub}')" class="py-3 bg-white/10 text-white rounded-xl font-bold text-xs hover:bg-white hover:text-slate-900 transition">${sub}</button>`).join('')}</div></div>` : ''}
                         </div>`;
                 }
             },
 
             renderHistory(container) {
-                container.innerHTML = `<div class="p-6 animate-slide"><h2 class="text-xl font-black mb-4">帳目明細</h2><div class="space-y-2">
-                    ${this.state.transactions.map(t=>`
-                        <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-50">
-                            <div><p class="font-black text-slate-800 text-sm">${t.subCat}</p><p class="text-[10px] text-slate-400 font-bold">${t.dateString} · ${t.mainCatName}</p></div>
-                            <div class="flex items-center gap-4">
-                                <div class="text-right"><p class="font-black ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.type==='income'?'+':'-'}${t.amount.toLocaleString()}</p></div>
-                                <button onclick="window.app.deleteTx('${t.id}')" class="text-slate-200 hover:text-rose-400 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                            </div>
-                        </div>`).join('')}
-                </div></div>`;
+                container.innerHTML = `<div class="p-6 animate-slide">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-black">帳目明細</h2>
+                        <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-100 active:scale-95 transition">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> 匯出 Excel
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        ${this.state.transactions.map(t=>`
+                            <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-50">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-black text-slate-800 text-sm">${t.subCat}</span>
+                                        <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded-lg font-bold uppercase">${t.mainCatName}</span>
+                                    </div>
+                                    <p class="text-[10px] text-indigo-400 font-bold num-font">${t.dateString} <span class="text-slate-300 ml-1">${t.timeString || ''}</span></p>
+                                </div>
+                                <div class="flex items-center gap-4 text-right">
+                                    <div>
+                                        <p class="font-black ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.type==='income'?'+':'-'}${t.amount.toLocaleString()}</p>
+                                        <p class="text-[9px] text-slate-300 italic truncate max-w-[80px]">${t.note || ''}</p>
+                                    </div>
+                                    <button onclick="window.app.deleteTx('${t.id}')" class="text-slate-200 hover:text-rose-400 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                </div>`;
             },
 
             renderStats(container) {
@@ -225,11 +243,11 @@
                 const sorted = Object.entries(groups).sort((a,b) => b[1] - a[1]);
                 container.innerHTML = `<div class="p-6 animate-slide">
                     <div class="flex gap-2 mb-6 bg-white p-1 rounded-xl shadow-sm">
-                        <button onclick="window.app.state.statsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-xs ${s.statsType==='expense'?'bg-rose-500 text-white':'text-slate-400'}">支出分析</button>
-                        <button onclick="window.app.state.statsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-xs ${s.statsType==='income'?'bg-emerald-500 text-white':'text-slate-400'}">收入分析</button>
+                        <button onclick="window.app.state.statsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-xs ${s.statsType==='expense'?'bg-rose-500 text-white shadow-lg':'text-slate-400'}">支出分析</button>
+                        <button onclick="window.app.state.statsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-xs ${s.statsType==='income'?'bg-emerald-500 text-white shadow-lg':'text-slate-400'}">收入分析</button>
                     </div>
-                    <div class="bg-indigo-600 p-8 rounded-[2rem] text-white mb-8 shadow-xl text-center"><p class="text-4xl num-font font-black">$${total.toLocaleString()}</p></div>
-                    <div class="space-y-4">${sorted.map(([n, v]) => `<div class="space-y-1"><div class="flex justify-between text-xs font-black text-slate-600"><span>${n}</span><span>$${v.toLocaleString()}</span></div><div class="w-full bg-slate-200 h-2 rounded-full"><div class="h-full rounded-full ${s.statsType==='income'?'bg-emerald-500':'bg-rose-500'}" style="width: ${(v/total*100)||0}%"></div></div></div>`).join('')}</div>
+                    <div class="bg-indigo-600 p-8 rounded-[2rem] text-white mb-8 shadow-xl text-center"><p class="text-4xl num-font font-black tracking-tighter">$${total.toLocaleString()}</p></div>
+                    <div class="space-y-5">${sorted.map(([n, v]) => `<div class="space-y-1"><div class="flex justify-between text-xs font-black"><span>${n}</span><span>$${v.toLocaleString()}</span></div><div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden"><div class="h-full rounded-full ${s.statsType==='income'?'bg-emerald-500':'bg-rose-500'}" style="width: ${(v/total*100)||0}%"></div></div></div>`).join('')}</div>
                 </div>`;
             },
 
@@ -239,43 +257,27 @@
                     <div class="p-6 animate-slide">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-xl font-black">類別設定</h2>
-                            <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-lg shadow-lg"><i data-lucide="plus" class="w-5 h-5"></i></button>
+                            <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-lg shadow-lg active:scale-95 transition"><i data-lucide="plus" class="w-5 h-5"></i></button>
                         </div>
-                        
                         ${s.isAdding ? `
                             <div class="bg-white p-5 rounded-2xl shadow-xl border-2 border-indigo-100 mb-6 space-y-3">
-                                <h3 class="text-xs font-black text-indigo-500 uppercase tracking-widest">${s.editingCatId ? '編輯類別' : '新增類別'}</h3>
                                 <div class="flex gap-2">
-                                    <input id="new-cat-icon" placeholder="Emoji" class="w-16 bg-slate-50 p-3 rounded-lg text-center text-xl border-none" maxlength="2" />
+                                    <input id="new-cat-icon" placeholder="Emoji" class="w-16 bg-slate-50 p-3 rounded-lg text-center text-xl" maxlength="2" />
                                     <input id="new-cat-name" placeholder="主類別名稱" class="flex-1 bg-slate-50 p-3 rounded-lg text-sm font-bold border-none" />
                                 </div>
-                                <select id="new-cat-type" class="w-full bg-slate-50 p-3 rounded-lg text-sm font-bold border-none">
-                                    <option value="expense">支出項目</option><option value="income">收入項目</option>
-                                </select>
+                                <select id="new-cat-type" class="w-full bg-slate-50 p-3 rounded-lg text-sm font-bold border-none"><option value="expense">支出項目</option><option value="income">收入項目</option></select>
                                 <input id="new-cat-subs" placeholder="子類別 (逗號隔開)" class="w-full bg-slate-50 p-3 rounded-lg text-sm font-bold border-none" />
-                                <div class="flex gap-2 pt-2">
-                                    <button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold text-sm">儲存</button>
-                                    <button onclick="window.app.state.isAdding=false; window.app.render();" class="flex-1 bg-slate-100 text-slate-500 py-2 rounded-lg font-bold text-sm">取消</button>
-                                </div>
-                            </div>
-                        ` : ''}
-
+                                <div class="flex gap-2 pt-2"><button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold text-sm">儲存類別</button><button onclick="window.app.state.isAdding=false; window.app.render();" class="flex-1 bg-slate-100 text-slate-500 py-2 rounded-lg font-bold text-sm">取消</button></div>
+                            </div>` : ''}
                         <div class="space-y-3">
-                            ${s.categories.map(c => `
-                                <div onclick='window.app.editCat(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-slate-50 active:scale-[0.98] transition cursor-pointer">
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-2xl">${c.icon}</span>
-                                        <div>
-                                            <p class="font-bold text-sm">${c.name} <span class="text-[8px] px-1 py-0.5 rounded ${c.type==='income'?'bg-emerald-100 text-emerald-600':'bg-rose-100 text-rose-600'}">${c.type==='income'?'收':'支'}</span></p>
-                                            <p class="text-[9px] text-slate-400 font-bold uppercase tracking-tight">${c.subCategories.join(' · ')}</p>
-                                        </div>
-                                    </div>
-                                    <button onclick="window.app.deleteCat('${c.id}')" class="text-slate-200 hover:text-rose-500 transition p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                                </div>
-                            `).join('')}
+                            ${s.categories.map(c => `<div onclick='window.app.editCat(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-50 cursor-pointer active:scale-95 transition">
+                                <div class="flex items-center gap-3"><span class="text-2xl">${c.icon}</span><p class="font-bold text-sm">${c.name} <span class="text-[8px] px-1 py-0.5 rounded ${c.type==='income'?'bg-emerald-100 text-emerald-600':'bg-rose-100 text-rose-600'}">${c.type==='income'?'收':'支'}</span></p></div>
+                                <button onclick="window.app.deleteCat('${c.id}')" class="text-slate-200 hover:text-rose-500 transition p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </div>`).join('')}
                         </div>
                     </div>`;
-            }
+            },
+            editCat(cat) { this.state.isAdding = true; this.state.editingCatId = cat.id; this.render(); document.getElementById('new-cat-icon').value = cat.icon; document.getElementById('new-cat-name').value = cat.name; document.getElementById('new-cat-type').value = cat.type; document.getElementById('new-cat-subs').value = cat.subCategories.join(','); }
         };
 
         onAuthStateChanged(auth, async (user) => {
@@ -284,33 +286,19 @@
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('app-content').classList.remove('hidden');
                 document.getElementById('user-display').innerText = user.email;
-                
-                // 啟動監聽並保存銷毀函數
-                unsubTransactions = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), (snap) => {
-                    window.app.state.transactions = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>b.timestamp-a.timestamp);
-                    window.app.render();
-                });
-                unsubCategories = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'categories'), (snap) => {
-                    window.app.state.categories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    window.app.render();
-                });
+                unsubTx = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), snap => { window.app.state.transactions = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>b.timestamp-a.timestamp); window.app.render(); });
+                unsubCat = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'categories'), snap => { window.app.state.categories = snap.docs.map(d => ({ id: d.id, ...d.data() })); window.app.render(); });
             } else {
-                // 如果登出或非法，先銷毀監聽
-                if(unsubTransactions) unsubTransactions();
-                if(unsubCategories) unsubCategories();
+                if(unsubTx) unsubTx(); if(unsubCat) unsubCat();
                 window.app.state.user = null;
                 document.getElementById('login-screen').classList.remove('hidden');
                 document.getElementById('app-content').classList.add('hidden');
-                if (user) { alert("未經授權的帳號"); await signOut(auth); }
+                if (user) { alert("帳號無權限"); await signOut(auth); }
             }
         });
 
         document.getElementById('google-login-btn').onclick = () => signInWithPopup(auth, provider);
-        document.getElementById('logout-btn').onclick = async () => {
-            if(unsubTransactions) unsubTransactions();
-            if(unsubCategories) unsubCategories();
-            await signOut(auth);
-        };
+        document.getElementById('logout-btn').onclick = async () => { if(unsubTx) unsubTx(); if(unsubCat) unsubCat(); await signOut(auth); };
 
     </script>
 </body>
