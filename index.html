@@ -8,6 +8,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@700&display=swap');
         
@@ -29,6 +30,10 @@
         .nav-active { color: #4f46e5; background-color: #f5f3ff; }
         .animate-up { animation: slideUp 0.2s ease-out; }
         @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        /* 拖拉時的樣式 */
+        .sortable-ghost { opacity: 0.4; background: #e0e7ff; }
+        .sortable-drag { cursor: grabbing; opacity: 1; background: white; transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
     </style>
 </head>
 <body>
@@ -63,7 +68,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyAC6VEkioGi-VC8MHXW3-nl4ngWwPRsMyw",
@@ -82,15 +87,17 @@
     const appId = 'pocket-account-pro-v2';
 
     let unsubTx = null, unsubCat = null;
-    let chartInstance = null; // 用來存儲圖表實例
+    let chartInstance = null;
 
     window.app = {
         state: {
             user: null, activeTab: 'home', transactions: [], categories: [],
             homeStep: 1, amount: '0', note: '', type: 'expense',
-            selectedMainCat: null, statsType: 'expense', isAdding: false, editingCatId: null,
-            // 新增日期狀態
-            viewDate: new Date() 
+            selectedMainCat: null, statsType: 'expense', 
+            isAdding: false, editingCatId: null,
+            viewDate: new Date(),
+            // 新增分類頁面的狀態
+            settingsType: 'expense' 
         },
 
         switchTab(tab) {
@@ -100,15 +107,13 @@
             this.render();
         },
 
-        // 新增月份切換功能
         changeMonth(offset) {
             const d = this.state.viewDate;
             d.setMonth(d.getMonth() + offset);
-            this.state.viewDate = new Date(d); // 觸發更新
+            this.state.viewDate = new Date(d);
             this.render();
         },
 
-        // 取得當前選定月份的交易資料
         getFilteredTransactions() {
             const y = this.state.viewDate.getFullYear();
             const m = this.state.viewDate.getMonth();
@@ -175,6 +180,9 @@
 
         renderHome(container) {
             const s = this.state;
+            // 首頁只顯示排序好的分類
+            const cats = s.categories.filter(c=>c.type===s.type).sort((a,b)=>(a.order||0)-(b.order||0));
+
             if (s.homeStep === 1) {
                 container.innerHTML = `
                 <div class="p-5 animate-up">
@@ -198,7 +206,7 @@
                 <div class="p-5 animate-up">
                     <button onclick="window.app.state.homeStep=1; window.app.render();" class="flex items-center gap-1 text-indigo-600 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回金額</button>
                     <div class="grid grid-cols-3 gap-3 mb-6">
-                        ${s.categories.filter(c=>c.type===s.type).map(c=>`
+                        ${cats.map(c=>`
                             <button onclick="window.app.state.selectedMainCat=${JSON.stringify(c).replace(/"/g, '&quot;')}; window.app.render();" class="p-4 rounded-3xl border-2 transition flex flex-col items-center gap-1 ${s.selectedMainCat?.id===c.id?'border-indigo-600 bg-indigo-50':'border-transparent bg-white shadow-sm'}">
                                 <span class="text-3xl">${c.icon}</span>
                                 <span class="text-[10px] font-bold text-slate-500">${c.name}</span>
@@ -211,7 +219,6 @@
             }
         },
 
-        // 月份選擇器 HTML 生成
         getMonthSelectorHTML() {
             const dateStr = this.state.viewDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' });
             return `
@@ -273,10 +280,7 @@
             const groups = filtered.reduce((acc, t) => { acc[t.mainCatName] = (acc[t.mainCatName] || 0) + t.amount; return acc; }, {});
             const sorted = Object.entries(groups).sort((a,b) => b[1] - a[1]);
             
-            // 顏色庫
-            const colors = [
-                '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#3b82f6', '#ef4444', '#10b981'
-            ];
+            const colors = ['#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#3b82f6', '#ef4444', '#10b981'];
 
             container.innerHTML = `<div class="p-5 animate-up">
                 ${this.getMonthSelectorHTML()}
@@ -310,7 +314,6 @@
                 </div>
             </div>`;
 
-            // 繪製 Chart.js 圓餅圖
             if (sorted.length > 0) {
                 if (chartInstance) chartInstance.destroy();
                 setTimeout(() => {
@@ -327,38 +330,48 @@
                                     hoverOffset: 4
                                 }]
                             },
-                            options: {
-                                responsive: true,
-                                cutout: '70%',
-                                plugins: { legend: { display: false } }
-                            }
+                            options: { responsive: true, cutout: '70%', plugins: { legend: { display: false } } }
                         });
                     }
                 }, 50);
-            } else {
-                 if (chartInstance) chartInstance.destroy();
-            }
+            } else { if (chartInstance) chartInstance.destroy(); }
         },
 
         renderSettings(container) {
             const s = this.state;
+            // 根據選中的 Tab (支出/收入) 篩選並排序
+            const cats = s.categories
+                .filter(c => c.type === s.settingsType)
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
             container.innerHTML = `
                 <div class="p-5 animate-up">
-                    <div class="flex justify-between items-center mb-5">
+                    <div class="flex justify-between items-center mb-4">
                         <h2 class="text-lg font-black text-slate-800">分類管理</h2>
                         <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><i data-lucide="plus" class="w-5 h-5"></i></button>
                     </div>
+
+                    <div class="flex gap-2 mb-6 bg-white p-1 rounded-xl shadow-sm border border-slate-100">
+                        <button onclick="window.app.state.settingsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.settingsType==='expense'?'bg-rose-50 text-rose-600 shadow-sm ring-1 ring-rose-100':'text-slate-400 hover:bg-slate-50'}">支出項目</button>
+                        <button onclick="window.app.state.settingsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.settingsType==='income'?'bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-emerald-100':'text-slate-400 hover:bg-slate-50'}">收入項目</button>
+                    </div>
+
                     ${s.isAdding ? `<div class="bg-white p-5 rounded-[2rem] shadow-xl border border-indigo-50 mb-6 space-y-4 animate-up">
                         <div class="flex gap-3"><input id="new-cat-icon" placeholder="圖示" class="w-16 bg-slate-50 p-3 rounded-xl text-center text-xl" maxlength="2"/><input id="new-cat-name" placeholder="名稱" class="flex-1 bg-slate-50 p-3 rounded-xl text-xs font-bold"/></div>
-                        <select id="new-cat-type" class="w-full bg-slate-50 p-3 rounded-xl text-xs font-bold"><option value="expense">支出項目</option><option value="income">收入項目</option></select>
+                        <div class="text-[10px] font-bold text-slate-400 pl-1">類別：${s.settingsType==='expense'?'支出':'收入'}</div>
                         <input id="new-cat-subs" placeholder="子類別 (以逗號隔開)" class="w-full bg-slate-50 p-3 rounded-xl text-xs font-bold"/>
                         <div class="flex gap-2 pt-2"><button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs">儲存</button><button onclick="window.app.state.isAdding=false; window.app.render();" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-bold text-xs">取消</button></div>
                     </div>` : ''}
-                    <div class="space-y-2">
-                        ${s.categories.map(c => `
-                            <div onclick="window.app.editCat('${c.id}')" class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-50 cursor-pointer active:scale-[0.98] transition">
-                                <div class="flex items-center gap-4"><span class="text-2xl">${c.icon}</span><p class="font-bold text-sm text-slate-700">${c.name} <span class="text-[8px] px-1.5 py-0.5 rounded ${c.type==='income'?'bg-emerald-50 text-emerald-600':'bg-rose-50 text-rose-600'}">${c.type==='income'?'收':'支'}</span></p></div>
-                                <button onclick="event.stopPropagation(); window.app.deleteCat('${c.id}')" class="text-slate-200 hover:text-rose-400 p-2 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+
+                    <div id="sortable-list" class="space-y-2 pb-10">
+                        ${cats.map(c => `
+                            <div data-id="${c.id}" class="bg-white p-3 pr-4 rounded-2xl flex items-center shadow-sm border border-slate-50 cursor-pointer active:scale-[0.99] transition group select-none">
+                                <div class="drag-handle px-3 text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-500"><i data-lucide="grip-vertical" class="w-5 h-5"></i></div>
+                                <div onclick="window.app.editCat('${c.id}')" class="flex-1 flex items-center gap-4">
+                                    <span class="text-2xl">${c.icon}</span>
+                                    <p class="font-bold text-sm text-slate-700">${c.name}</p>
+                                </div>
+                                <button onclick="window.app.deleteCat('${c.id}')" class="text-slate-200 hover:text-rose-400 p-2 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                             </div>`).join('')}
                     </div>
                 </div>`;
@@ -368,10 +381,41 @@
                 if (cat) {
                     document.getElementById('new-cat-icon').value = cat.icon;
                     document.getElementById('new-cat-name').value = cat.name;
-                    document.getElementById('new-cat-type').value = cat.type;
                     document.getElementById('new-cat-subs').value = cat.subCategories.join(',');
                 }
             }
+
+            // 初始化 SortableJS
+            const list = document.getElementById('sortable-list');
+            if (list) {
+                new Sortable(list, {
+                    handle: '.drag-handle', // 只能拖拉手把
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    onEnd: function (evt) {
+                        window.app.updateCategoryOrder();
+                    }
+                });
+            }
+        },
+
+        // 批次更新排序到 Firebase
+        async updateCategoryOrder() {
+            const list = document.getElementById('sortable-list');
+            const items = list.querySelectorAll('[data-id]');
+            const batch = writeBatch(db);
+            const type = this.state.settingsType;
+            
+            // 找出所有該類型的分類，更新順序
+            items.forEach((item, index) => {
+                const id = item.getAttribute('data-id');
+                const docRef = doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id);
+                batch.update(docRef, { order: index });
+            });
+
+            await batch.commit();
+            // 注意：這裡不需要手動更新 state，因為 onSnapshot 會監聽到變化並自動重繪
         },
 
         editCat(catId) {
@@ -382,13 +426,38 @@
 
         async saveCategory() {
             const name = document.getElementById('new-cat-name').value, icon = document.getElementById('new-cat-icon').value || '📁';
-            const subs = document.getElementById('new-cat-subs').value, type = document.getElementById('new-cat-type').value;
+            const subs = document.getElementById('new-cat-subs').value;
+            // 使用當前 Settings 頁籤的類型
+            const type = this.state.settingsType; 
+            
             if (!name) return alert('必填名稱');
             
             const id = this.state.editingCatId || ('cat_' + Date.now());
-            await setDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id), {
-                id, name, type, icon, subCategories: subs.split(/[,，]/).map(s => s.trim()).filter(Boolean)
-            });
+            
+            // 計算新 Order (放在最後)
+            let order = 0;
+            if (!this.state.editingCatId) {
+                const existing = this.state.categories.filter(c => c.type === type);
+                const maxOrder = existing.length > 0 ? Math.max(...existing.map(c => c.order || 0)) : -1;
+                order = maxOrder + 1;
+            }
+
+            const data = {
+                id, name, type, icon, 
+                subCategories: subs.split(/[,，]/).map(s => s.trim()).filter(Boolean)
+            };
+
+            // 如果是新增，才寫入 order，避免編輯時重置順序 (除非有需求)
+            if (!this.state.editingCatId) {
+                data.order = order;
+            } else {
+                // 編輯時保留原 order，若無則補 0
+                const old = this.state.categories.find(c => c.id === id);
+                data.order = old ? (old.order || 0) : 0;
+            }
+
+            await setDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id), data);
+            
             this.state.isAdding = false;
             this.state.editingCatId = null;
         },
