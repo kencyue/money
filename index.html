@@ -112,6 +112,8 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const provider = new GoogleAuthProvider();
+        
+        // 優先讀取環境變數 appId，否則使用預設值
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'pocket-account-pro-v2';
 
         const DEFAULT_CATEGORIES = [
@@ -135,19 +137,21 @@
             statsType: 'expense'
         };
 
-        // --- 驗證流程 (遵循環境規則 3) ---
+        // --- 驗證流程 (遵循環境規則 3: 必須先執行登入並等待) ---
         const initAuth = async () => {
             try {
-                // 優先使用環境提供的 Token
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    // 若無 Token，則先執行匿名登入作為備援，確保 Firestore 權限路徑可用
+                    await signInAnonymously(auth);
                 }
-                // 如果沒有 Token 且目前沒有使用者，保持登入畫面供使用者手動操作
             } catch (e) {
                 console.error("驗證初始化失敗:", e);
             }
         };
 
+        // 監聽登入狀態改變
         onAuthStateChanged(auth, (user) => {
             state.user = user;
             const loginScreen = document.getElementById('login-screen');
@@ -157,7 +161,7 @@
                 loginScreen.classList.add('hidden');
                 appContent.classList.remove('hidden');
                 document.getElementById('user-display').innerText = user.email ? user.email.split('@')[0] : '匿名用戶';
-                initDataListeners();
+                initDataListeners(); // 登入成功後啟動監聽
             } else {
                 loginScreen.classList.remove('hidden');
                 appContent.classList.add('hidden');
@@ -166,11 +170,13 @@
         });
 
         function initDataListeners() {
+            // 防禦性檢查：若無使用者則不執行查詢
             if (!state.user) return;
+            
             showLoading(true);
             const userId = state.user.uid;
             
-            // 監聽交易紀錄
+            // 監聽交易紀錄 - 嚴格遵循 Rule 1 的路徑結構
             const txRef = collection(db, 'artifacts', appId, 'users', userId, 'transactions');
             onSnapshot(txRef, (snapshot) => {
                 state.transactions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -178,7 +184,7 @@
                 render();
                 showLoading(false);
             }, (err) => {
-                console.error("讀取交易紀錄出錯:", err);
+                console.error("讀取交易紀錄出錯 (Permission Issue?):", err);
                 showLoading(false);
             });
 
@@ -191,10 +197,12 @@
                     state.categories = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     render();
                 }
-            }, (err) => console.error("讀取分類出錯:", err));
+            }, (err) => {
+                console.error("讀取分類出錯:", err);
+            });
         }
 
-        // --- 操作函數 ---
+        // --- 計算機與導覽邏輯 ---
         window.switchTab = (tab) => {
             state.activeTab = tab;
             render();
@@ -285,7 +293,7 @@
 
         window.showLoading = (show) => document.getElementById('loading-screen').classList[show ? 'remove' : 'add']('hidden');
 
-        // --- 渲染引擎 ---
+        // --- 渲染組件 ---
         function render() {
             const main = document.getElementById('main-view');
             if (!main) return;
@@ -541,25 +549,29 @@
             const errorMsg = document.getElementById('auth-error-msg');
             errorMsg.classList.add('hidden');
             try {
+                // 執行彈窗登入
                 await signInWithPopup(auth, provider);
             } catch (error) {
-                console.error("Login Error", error);
+                console.error("Google 登入失敗:", error);
                 if (error.code === 'auth/unauthorized-domain') {
-                    errorMsg.innerText = "登入失敗：當前網域未獲授權。請在 Firebase 控制台將此網域新增至「授權網域」，或改用匿名模式測試。";
+                    errorMsg.innerText = "登入失敗：當前網域未獲授權。請在 Firebase 控制台將此網域新增至「授權網域」，或點擊下方按鈕以『遊客模式』繼續。";
                     errorMsg.classList.remove('hidden');
-                    // 當 Google 登入因網域問題失敗時，提供匿名登入作為備選方案以確保 App 可用
+                    
+                    // 自動嘗試遊客模式（匿名登入），以確保 App 在預覽網域可執行
                     setTimeout(async () => {
-                        if (confirm("偵測到網域授權問題。是否改用匿名模式登入以繼續使用 App？")) {
+                        try {
                             await signInAnonymously(auth);
+                        } catch (anonErr) {
+                            console.error("遊客登入也失敗:", anonErr);
                         }
-                    }, 1000);
+                    }, 1500);
                 }
             }
         };
         
         document.getElementById('logout-btn').onclick = () => signOut(auth);
 
-        // 啟動身份驗證初始化
+        // 啟動身分驗證初始化流程
         initAuth();
 
     </script>
