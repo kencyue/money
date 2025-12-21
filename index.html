@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@700&display=swap');
         
@@ -54,7 +55,7 @@
         <nav class="glass-effect fixed bottom-0 left-0 right-0 max-w-md mx-auto border-t flex justify-around p-1 pb-[calc(env(safe-area-inset-bottom)+4px)] z-50">
             <button onclick="window.app.switchTab('home')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="home"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">記帳</span></button>
             <button onclick="window.app.switchTab('history')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="history"><i data-lucide="layout-list" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">明細</span></button>
-            <button onclick="window.app.switchTab('stats')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="stats"><i data-lucide="bar-chart-3" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">分析</span></button>
+            <button onclick="window.app.switchTab('stats')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="stats"><i data-lucide="pie-chart" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">分析</span></button>
             <button onclick="window.app.switchTab('settings')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="settings"><i data-lucide="layers" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">分類</span></button>
         </nav>
     </div>
@@ -81,12 +82,15 @@
     const appId = 'pocket-account-pro-v2';
 
     let unsubTx = null, unsubCat = null;
+    let chartInstance = null; // 用來存儲圖表實例
 
     window.app = {
         state: {
             user: null, activeTab: 'home', transactions: [], categories: [],
             homeStep: 1, amount: '0', note: '', type: 'expense',
-            selectedMainCat: null, statsType: 'expense', isAdding: false, editingCatId: null
+            selectedMainCat: null, statsType: 'expense', isAdding: false, editingCatId: null,
+            // 新增日期狀態
+            viewDate: new Date() 
         },
 
         switchTab(tab) {
@@ -94,6 +98,24 @@
             this.state.isAdding = false;
             this.state.editingCatId = null;
             this.render();
+        },
+
+        // 新增月份切換功能
+        changeMonth(offset) {
+            const d = this.state.viewDate;
+            d.setMonth(d.getMonth() + offset);
+            this.state.viewDate = new Date(d); // 觸發更新
+            this.render();
+        },
+
+        // 取得當前選定月份的交易資料
+        getFilteredTransactions() {
+            const y = this.state.viewDate.getFullYear();
+            const m = this.state.viewDate.getMonth();
+            return this.state.transactions.filter(t => {
+                const td = new Date(t.timestamp);
+                return td.getFullYear() === y && td.getMonth() === m;
+            });
         },
 
         render() {
@@ -138,15 +160,17 @@
         },
 
         exportToExcel() {
-            if (this.state.transactions.length === 0) return alert('無帳目');
-            const data = this.state.transactions.map(t => ({
+            const filtered = this.getFilteredTransactions();
+            if (filtered.length === 0) return alert('此月份無帳目');
+            const data = filtered.map(t => ({
                 '日期': t.dateString, '時間': t.timeString, '類型': t.type === 'income' ? '收入' : '支出',
                 '主類別': t.mainCatName, '子類別': t.subCat, '金額': t.amount, '備註': t.note || ''
             }));
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Records");
-            XLSX.writeFile(wb, `Account_${new Date().toISOString().split('T')[0]}.xlsx`);
+            const dateStr = this.state.viewDate.toISOString().slice(0,7);
+            XLSX.writeFile(wb, `Account_${dateStr}.xlsx`);
         },
 
         renderHome(container) {
@@ -187,14 +211,44 @@
             }
         },
 
+        // 月份選擇器 HTML 生成
+        getMonthSelectorHTML() {
+            const dateStr = this.state.viewDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' });
+            return `
+            <div class="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm mb-4 border border-slate-100">
+                <button onclick="window.app.changeMonth(-1)" class="p-2 text-slate-400 hover:text-indigo-600"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                <span class="font-black text-slate-700 text-sm tracking-widest">${dateStr}</span>
+                <button onclick="window.app.changeMonth(1)" class="p-2 text-slate-400 hover:text-indigo-600"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+            </div>`;
+        },
+
         renderHistory(container) {
+            const filtered = this.getFilteredTransactions();
+            const totalExp = filtered.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
+            const totalInc = filtered.filter(t=>t.type==='income').reduce((a,b)=>a+b.amount,0);
+
             container.innerHTML = `<div class="p-5 animate-up">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-black text-slate-800">帳目明細</h2>
                     <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 shadow-md"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>匯出 XLSX</button>
                 </div>
+                
+                ${this.getMonthSelectorHTML()}
+
+                <div class="flex gap-2 mb-4">
+                     <div class="flex-1 bg-rose-50 p-3 rounded-xl">
+                        <p class="text-[9px] text-rose-400 font-bold mb-1">總支出</p>
+                        <p class="text-lg font-black text-rose-600 num-font">$${totalExp.toLocaleString()}</p>
+                     </div>
+                     <div class="flex-1 bg-emerald-50 p-3 rounded-xl">
+                        <p class="text-[9px] text-emerald-400 font-bold mb-1">總收入</p>
+                        <p class="text-lg font-black text-emerald-600 num-font">$${totalInc.toLocaleString()}</p>
+                     </div>
+                </div>
+
                 <div class="space-y-2">
-                    ${this.state.transactions.map(t=>`
+                    ${filtered.length === 0 ? `<div class="text-center py-10 text-slate-300 text-xs font-bold">本月無資料</div>` : 
+                    filtered.map(t=>`
                         <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
                             <div>
                                 <div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-sm">${t.subCat}</span><span class="text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded font-bold">${t.mainCatName}</span></div>
@@ -213,18 +267,77 @@
         },
 
         renderStats(container) {
-            const s = this.state, filtered = s.transactions.filter(t => t.type === s.statsType);
+            const s = this.state;
+            const filtered = this.getFilteredTransactions().filter(t => t.type === s.statsType);
             const total = filtered.reduce((acc, t) => acc + t.amount, 0);
             const groups = filtered.reduce((acc, t) => { acc[t.mainCatName] = (acc[t.mainCatName] || 0) + t.amount; return acc; }, {});
             const sorted = Object.entries(groups).sort((a,b) => b[1] - a[1]);
+            
+            // 顏色庫
+            const colors = [
+                '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#3b82f6', '#ef4444', '#10b981'
+            ];
+
             container.innerHTML = `<div class="p-5 animate-up">
+                ${this.getMonthSelectorHTML()}
+                
                 <div class="flex gap-2 mb-4 bg-white p-1 rounded-xl shadow-sm">
                     <button onclick="window.app.state.statsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.statsType==='expense'?'bg-rose-500 text-white shadow-md':'text-slate-400'}">支出</button>
                     <button onclick="window.app.state.statsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.statsType==='income'?'bg-emerald-500 text-white shadow-md':'text-slate-400'}">收入</button>
                 </div>
-                <div class="bg-slate-900 p-8 rounded-[2.5rem] text-white mb-6 text-center shadow-xl"><p class="text-[10px] font-bold text-slate-400 mb-1">TOTAL</p><p class="text-4xl num-font font-black">$${total.toLocaleString()}</p></div>
-                <div class="space-y-4">${sorted.map(([n, v]) => `<div class="space-y-1.5"><div class="flex justify-between text-[11px] font-black text-slate-600"><span>${n}</span><span>$${v.toLocaleString()}</span></div><div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden"><div class="h-full rounded-full ${s.statsType==='income'?'bg-emerald-500':'bg-rose-500'}" style="width: ${(v/total*100)||0}%"></div></div></div>`).join('')}</div>
+
+                <div class="bg-white p-4 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6 relative">
+                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none flex-col pt-4">
+                        <span class="text-[10px] text-slate-400 font-bold">Total</span>
+                        <span class="text-xl font-black text-slate-700 num-font">$${total.toLocaleString()}</span>
+                     </div>
+                     <canvas id="statsChart" class="max-h-[220px]"></canvas>
+                </div>
+
+                <div class="space-y-4">
+                    ${sorted.length === 0 ? `<div class="text-center py-5 text-slate-300 text-xs font-bold">無數據可分析</div>` :
+                    sorted.map(([n, v], idx) => `
+                    <div class="bg-white p-3 rounded-xl border border-slate-50 flex items-center gap-3">
+                        <div class="w-3 h-3 rounded-full shrink-0" style="background-color: ${colors[idx % colors.length]}"></div>
+                        <div class="flex-1 space-y-1">
+                            <div class="flex justify-between text-[11px] font-black text-slate-600">
+                                <span>${n}</span>
+                                <span>$${v.toLocaleString()}</span>
+                            </div>
+                            <div class="text-[9px] text-slate-400 font-bold text-right">${Math.round(v/total*100)}%</div>
+                        </div>
+                    </div>`).join('')}
+                </div>
             </div>`;
+
+            // 繪製 Chart.js 圓餅圖
+            if (sorted.length > 0) {
+                if (chartInstance) chartInstance.destroy();
+                setTimeout(() => {
+                    const ctx = document.getElementById('statsChart');
+                    if (ctx) {
+                        chartInstance = new Chart(ctx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: sorted.map(i => i[0]),
+                                datasets: [{
+                                    data: sorted.map(i => i[1]),
+                                    backgroundColor: colors,
+                                    borderWidth: 0,
+                                    hoverOffset: 4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                cutout: '70%',
+                                plugins: { legend: { display: false } }
+                            }
+                        });
+                    }
+                }, 50);
+            } else {
+                 if (chartInstance) chartInstance.destroy();
+            }
         },
 
         renderSettings(container) {
