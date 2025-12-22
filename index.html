@@ -460,13 +460,12 @@
             } else { if (chartInstance) chartInstance.destroy(); }
         },
 
-       renderSettings(container) {
+      renderSettings(container) {
             const s = this.state;
             const cats = s.categories
                 .filter(c => c.type === s.settingsType)
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
 
-            // 分類頁 (上方按鈕固定，分類列表捲動)
             container.innerHTML = `
                 <div class="flex flex-col h-full animate-up">
                     <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
@@ -484,7 +483,10 @@
                             <div class="flex gap-3"><input id="new-cat-icon" placeholder="圖示" class="w-16 bg-slate-50 p-3 rounded-xl text-center text-xl" maxlength="2"/><input id="new-cat-name" placeholder="名稱" class="flex-1 bg-slate-50 p-3 rounded-xl text-xs font-bold"/></div>
                             <div class="text-[10px] font-bold text-slate-400 pl-1">類別：${s.settingsType==='expense'?'支出':'收入'}</div>
                             <input id="new-cat-subs" placeholder="子類別 (以逗號隔開)" class="w-full bg-slate-50 p-3 rounded-xl text-xs font-bold"/>
-                            <div class="flex gap-2 pt-2"><button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs">儲存</button><button onclick="window.app.state.isAdding=false; window.app.render();" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-bold text-xs">取消</button></div>
+                            <div class="flex gap-2 pt-2">
+                                <button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs">儲存</button>
+                                <button onclick="window.app.state.isAdding=false; window.app.state.editingCatId=null; window.app.render();" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-bold text-xs">取消</button>
+                            </div>
                         </div>` : ''}
                     </div>
 
@@ -503,12 +505,19 @@
                     </div>
                 </div>`;
 
-            if (s.editingCatId) {
+            // 修改重點：這裡多加了 && s.isAdding 判斷
+            // 只有在「新增模式開啟」且「有編輯ID」時，才去抓取 DOM 元素填值
+            // 這樣就避免了因為找不到元素而報錯，進而導致圖示消失的問題
+            if (s.isAdding && s.editingCatId) {
                 const cat = s.categories.find(c => c.id === s.editingCatId);
                 if (cat) {
-                    document.getElementById('new-cat-icon').value = cat.icon;
-                    document.getElementById('new-cat-name').value = cat.name;
-                    document.getElementById('new-cat-subs').value = cat.subCategories.join(',');
+                    // 因為有用 s.isAdding 保護，這裡保證 new-cat-icon 一定存在
+                    const iconInput = document.getElementById('new-cat-icon');
+                    if (iconInput) {
+                        iconInput.value = cat.icon;
+                        document.getElementById('new-cat-name').value = cat.name;
+                        document.getElementById('new-cat-subs').value = cat.subCategories.join(',');
+                    }
                 }
             }
 
