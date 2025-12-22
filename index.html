@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>口袋記帳 Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -12,18 +12,33 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@700&display=swap');
         
+        /* 修改: 使用 dvh 解決網址列閃爍問題 */
         body { 
             font-family: 'Noto Sans TC', sans-serif; 
             -webkit-tap-highlight-color: transparent; 
-            height: 100vh; height: -webkit-fill-available;
+            height: 100dvh; /* 關鍵修改：使用 dynamic viewport height */
+            width: 100vw;
             overflow: hidden; 
             background-color: #f8fafc;
         }
         .num-font { font-family: 'JetBrains Mono', monospace; }
         .glass-effect { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
         
-        .app-container { height: 100vh; height: -webkit-fill-available; display: flex; flex-direction: column; }
-        .content-area { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+        /* 修改: 確保容器高度固定，並讓子元素正確捲動 */
+        .app-container { 
+            height: 100dvh; 
+            display: flex; 
+            flex-direction: column; 
+            position: relative;
+        }
+        .content-area { 
+            flex: 1; 
+            overflow-y: auto; 
+            overflow-x: hidden;
+            padding-bottom: 80px; 
+            min-height: 0; /* 關鍵修改：防止 Flex 子元素被內容撐爆 */
+            -webkit-overflow-scrolling: touch; /* 讓 iOS 捲動更滑順 */
+        }
         
         .calc-btn { transition: transform 0.05s ease; border: 1px solid rgba(0,0,0,0.03); display: flex; align-items: center; justify-content: center; }
         .calc-btn:active { transform: scale(0.92); background-color: #e2e8f0; }
@@ -31,7 +46,6 @@
         .animate-up { animation: slideUp 0.2s ease-out; }
         @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         
-        /* 拖拉時的樣式 */
         .sortable-ghost { opacity: 0.4; background: #e0e7ff; }
         .sortable-drag { cursor: grabbing; opacity: 1; background: white; transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
     </style>
@@ -96,15 +110,18 @@
             selectedMainCat: null, statsType: 'expense', 
             isAdding: false, editingCatId: null,
             viewDate: new Date(),
-            // 新增分類頁面的狀態
-            settingsType: 'expense' 
+            settingsType: 'expense',
+            statsDetailCategory: null // 新增: 用於分析頁的鑽取狀態
         },
 
         switchTab(tab) {
             this.state.activeTab = tab;
             this.state.isAdding = false;
             this.state.editingCatId = null;
+            this.state.statsDetailCategory = null; // 切換 Tab 時重置分析詳情
             this.render();
+            // 確保切換 Tab 時捲動回頂部
+            document.getElementById('main-view').scrollTop = 0;
         },
 
         changeMonth(offset) {
@@ -180,7 +197,6 @@
 
         renderHome(container) {
             const s = this.state;
-            // 首頁只顯示排序好的分類
             const cats = s.categories.filter(c=>c.type===s.type).sort((a,b)=>(a.order||0)-(b.order||0));
 
             if (s.homeStep === 1) {
@@ -234,7 +250,7 @@
             const totalExp = filtered.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
             const totalInc = filtered.filter(t=>t.type==='income').reduce((a,b)=>a+b.amount,0);
 
-            container.innerHTML = `<div class="p-5 animate-up">
+            container.innerHTML = `<div class="p-5 animate-up pb-20">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-black text-slate-800">帳目明細</h2>
                     <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 shadow-md"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>匯出 XLSX</button>
@@ -273,16 +289,50 @@
             </div>`;
         },
 
+        // 修改: renderStats 支援鑽取 (Drill-down)
         renderStats(container) {
             const s = this.state;
             const filtered = this.getFilteredTransactions().filter(t => t.type === s.statsType);
             const total = filtered.reduce((acc, t) => acc + t.amount, 0);
+
+            // 如果有選中特定類別，顯示該類別明細
+            if (s.statsDetailCategory) {
+                const catTxs = filtered.filter(t => t.mainCatName === s.statsDetailCategory);
+                container.innerHTML = `
+                <div class="p-5 animate-up pb-20">
+                    <button onclick="window.app.state.statsDetailCategory=null; window.app.render();" class="flex items-center gap-1 text-indigo-600 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回圖表</button>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-black text-slate-800">${s.statsDetailCategory}</h2>
+                        <span class="num-font font-bold text-slate-500">$${catTxs.reduce((a,b)=>a+b.amount,0).toLocaleString()}</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${catTxs.length === 0 ? `<div class="text-center py-10 text-slate-300 text-xs font-bold">無資料</div>` : 
+                        catTxs.map(t=>`
+                            <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
+                                <div>
+                                    <div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-sm">${t.subCat}</span></div>
+                                    <p class="text-[9px] text-indigo-400 font-bold num-font mt-1">${t.dateString} ${t.timeString}</p>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="text-right">
+                                        <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.amount.toLocaleString()}</p>
+                                        <p class="text-[8px] text-slate-300 italic truncate max-w-[80px]">${t.note || ''}</p>
+                                    </div>
+                                    <button onclick="window.app.deleteTx('${t.id}')" class="text-slate-200 hover:text-rose-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                </div>`;
+                return;
+            }
+
+            // 原有的圖表顯示邏輯
             const groups = filtered.reduce((acc, t) => { acc[t.mainCatName] = (acc[t.mainCatName] || 0) + t.amount; return acc; }, {});
             const sorted = Object.entries(groups).sort((a,b) => b[1] - a[1]);
             
             const colors = ['#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#3b82f6', '#ef4444', '#10b981'];
 
-            container.innerHTML = `<div class="p-5 animate-up">
+            container.innerHTML = `<div class="p-5 animate-up pb-20">
                 ${this.getMonthSelectorHTML()}
                 
                 <div class="flex gap-2 mb-4 bg-white p-1 rounded-xl shadow-sm">
@@ -301,11 +351,11 @@
                 <div class="space-y-4">
                     ${sorted.length === 0 ? `<div class="text-center py-5 text-slate-300 text-xs font-bold">無數據可分析</div>` :
                     sorted.map(([n, v], idx) => `
-                    <div class="bg-white p-3 rounded-xl border border-slate-50 flex items-center gap-3">
+                    <div onclick="window.app.state.statsDetailCategory='${n}'; window.app.render();" class="bg-white p-3 rounded-xl border border-slate-50 flex items-center gap-3 active:scale-95 transition cursor-pointer hover:bg-slate-50">
                         <div class="w-3 h-3 rounded-full shrink-0" style="background-color: ${colors[idx % colors.length]}"></div>
                         <div class="flex-1 space-y-1">
                             <div class="flex justify-between text-[11px] font-black text-slate-600">
-                                <span>${n}</span>
+                                <span>${n} <span class="text-[9px] text-indigo-300 ml-1 font-normal">(點擊查看)</span></span>
                                 <span>$${v.toLocaleString()}</span>
                             </div>
                             <div class="text-[9px] text-slate-400 font-bold text-right">${Math.round(v/total*100)}%</div>
@@ -339,13 +389,12 @@
 
         renderSettings(container) {
             const s = this.state;
-            // 根據選中的 Tab (支出/收入) 篩選並排序
             const cats = s.categories
                 .filter(c => c.type === s.settingsType)
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
 
             container.innerHTML = `
-                <div class="p-5 animate-up">
+                <div class="p-5 animate-up pb-20">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-lg font-black text-slate-800">分類管理</h2>
                         <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><i data-lucide="plus" class="w-5 h-5"></i></button>
@@ -385,11 +434,10 @@
                 }
             }
 
-            // 初始化 SortableJS
             const list = document.getElementById('sortable-list');
             if (list) {
                 new Sortable(list, {
-                    handle: '.drag-handle', // 只能拖拉手把
+                    handle: '.drag-handle',
                     animation: 150,
                     ghostClass: 'sortable-ghost',
                     dragClass: 'sortable-drag',
@@ -400,22 +448,16 @@
             }
         },
 
-        // 批次更新排序到 Firebase
         async updateCategoryOrder() {
             const list = document.getElementById('sortable-list');
             const items = list.querySelectorAll('[data-id]');
             const batch = writeBatch(db);
-            const type = this.state.settingsType;
-            
-            // 找出所有該類型的分類，更新順序
             items.forEach((item, index) => {
                 const id = item.getAttribute('data-id');
                 const docRef = doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id);
                 batch.update(docRef, { order: index });
             });
-
             await batch.commit();
-            // 注意：這裡不需要手動更新 state，因為 onSnapshot 會監聽到變化並自動重繪
         },
 
         editCat(catId) {
@@ -427,14 +469,12 @@
         async saveCategory() {
             const name = document.getElementById('new-cat-name').value, icon = document.getElementById('new-cat-icon').value || '📁';
             const subs = document.getElementById('new-cat-subs').value;
-            // 使用當前 Settings 頁籤的類型
             const type = this.state.settingsType; 
             
             if (!name) return alert('必填名稱');
             
             const id = this.state.editingCatId || ('cat_' + Date.now());
             
-            // 計算新 Order (放在最後)
             let order = 0;
             if (!this.state.editingCatId) {
                 const existing = this.state.categories.filter(c => c.type === type);
@@ -447,11 +487,9 @@
                 subCategories: subs.split(/[,，]/).map(s => s.trim()).filter(Boolean)
             };
 
-            // 如果是新增，才寫入 order，避免編輯時重置順序 (除非有需求)
             if (!this.state.editingCatId) {
                 data.order = order;
             } else {
-                // 編輯時保留原 order，若無則補 0
                 const old = this.state.categories.find(c => c.id === id);
                 data.order = old ? (old.order || 0) : 0;
             }
