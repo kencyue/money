@@ -29,13 +29,14 @@
             flex-direction: column; 
             position: relative;
         }
+        
+        /* 修改: 這裡改為 hidden，讓捲動行為由內層控制 */
         .content-area { 
             flex: 1; 
-            overflow-y: auto; 
-            overflow-x: hidden;
-            padding-bottom: 80px; 
-            min-height: 0;
-            -webkit-overflow-scrolling: touch;
+            overflow: hidden; 
+            position: relative;
+            display: flex;
+            flex-direction: column;
         }
         
         .calc-btn { transition: transform 0.05s ease; border: 1px solid rgba(0,0,0,0.03); display: flex; align-items: center; justify-content: center; }
@@ -47,8 +48,11 @@
         .sortable-ghost { opacity: 0.4; background: #e0e7ff; }
         .sortable-drag { cursor: grabbing; opacity: 1; background: white; transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         
-        /* 修改: 編輯模式的邊框動畫 */
         .editing-mode { border: 2px solid #f59e0b; }
+
+        /* 自定義捲軸樣式 (隱藏捲軸但保留功能，讓畫面更乾淨) */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body>
@@ -113,7 +117,7 @@
             viewDate: new Date(),
             settingsType: 'expense',
             statsDetailCategory: null,
-            editingTxId: null // 修改: 新增狀態，用來記錄是否正在編輯某一筆帳
+            editingTxId: null
         },
 
         switchTab(tab) {
@@ -122,11 +126,9 @@
             this.state.editingCatId = null;
             this.state.statsDetailCategory = null;
             
-            // 修改: 如果切換 Tab 且不是因為按下編輯按鈕而跳轉到 home，則取消編輯模式
             if (tab !== 'home' || !this.state.editingTxId) {
                  this.state.editingTxId = null;
                  if(tab === 'home') {
-                     // 重置 Home 狀態
                      this.state.amount = '0';
                      this.state.note = '';
                      this.state.homeStep = 1;
@@ -135,7 +137,7 @@
             }
 
             this.render();
-            document.getElementById('main-view').scrollTop = 0;
+            // 切換時不需要 scroll to top，因為現在是內部容器在捲動
         },
 
         changeMonth(offset) {
@@ -181,7 +183,6 @@
             if (display) display.innerText = `$${s.amount}`;
         },
 
-        // 修改: 載入編輯資料的函式
         editTx(txId) {
             const s = this.state;
             const tx = s.transactions.find(t => t.id === txId);
@@ -192,7 +193,6 @@
             s.note = tx.note || '';
             s.type = tx.type;
             
-            // 嘗試找回原本的類別物件，讓 UI 顯示正確的選取狀態
             const cat = s.categories.find(c => c.id === tx.mainCatId) || 
                         s.categories.find(c => c.name === tx.mainCatName && c.type === tx.type);
             
@@ -202,7 +202,6 @@
             this.render();
         },
 
-        // 修改: 取消編輯
         cancelEdit() {
             this.state.editingTxId = null;
             this.state.amount = '0';
@@ -211,7 +210,6 @@
             this.render();
         },
 
-        // 修改: 儲存邏輯，區分新增與更新
         async saveRecord(sub) {
             const s = this.state;
             const collectionRef = collection(db, 'artifacts', appId, 'users', s.user.uid, 'transactions');
@@ -226,12 +224,10 @@
             };
 
             if (s.editingTxId) {
-                // 更新模式: 這裡不更新 timestamp，保留原始記帳時間，除非你想更新為當下時間
                 const docRef = doc(db, 'artifacts', appId, 'users', s.user.uid, 'transactions', s.editingTxId);
                 await updateDoc(docRef, data);
-                s.editingTxId = null; // 清除編輯狀態
+                s.editingTxId = null; 
             } else {
-                // 新增模式
                 const now = new Date();
                 data.timestamp = now.getTime();
                 data.dateString = now.toLocaleDateString('zh-TW');
@@ -260,45 +256,42 @@
         renderHome(container) {
             const s = this.state;
             const cats = s.categories.filter(c=>c.type===s.type).sort((a,b)=>(a.order||0)-(b.order||0));
-            const isEditing = !!s.editingTxId; // 是否為編輯模式
+            const isEditing = !!s.editingTxId;
 
-            if (s.homeStep === 1) {
-                container.innerHTML = `
-                <div class="p-5 animate-up">
-                    <div class="bg-white rounded-[2rem] p-5 shadow-sm border ${isEditing ? 'border-amber-400 bg-amber-50' : 'border-slate-100'} mb-4 transition-colors">
-                        ${isEditing ? '<div class="flex justify-between items-center mb-2"><span class="text-[10px] font-black text-amber-500 bg-amber-100 px-2 py-1 rounded">編輯模式</span><button onclick="window.app.cancelEdit()" class="text-[10px] text-slate-400 underline">取消</button></div>' : ''}
-                        
-                        <div class="flex gap-2 mb-4 bg-slate-50 p-1 rounded-xl">
-                            <button onclick="window.app.state.type='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.type==='expense'?'bg-white text-rose-500 shadow-sm':'text-slate-400'}">支出</button>
-                            <button onclick="window.app.state.type='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.type==='income'?'bg-white text-emerald-500 shadow-sm':'text-slate-400'}">收入</button>
-                        </div>
-                        <div id="amount-text" class="num-font text-5xl font-bold text-right py-4 text-slate-800 tracking-tighter">$${s.amount}</div>
-                        <input type="text" placeholder="📝 備註..." oninput="window.app.state.note=this.value" value="${s.note}" class="w-full bg-slate-50 rounded-xl py-3 px-4 text-xs font-bold border-none" />
+            // Home 頁面雖然通常不需要內捲動，但為了避免小螢幕被切到，我們還是用 flex-1 overflow-y-auto 包起來
+            const inner = s.homeStep === 1 ? `
+                <div class="bg-white rounded-[2rem] p-5 shadow-sm border ${isEditing ? 'border-amber-400 bg-amber-50' : 'border-slate-100'} mb-4 transition-colors">
+                    ${isEditing ? '<div class="flex justify-between items-center mb-2"><span class="text-[10px] font-black text-amber-500 bg-amber-100 px-2 py-1 rounded">編輯模式</span><button onclick="window.app.cancelEdit()" class="text-[10px] text-slate-400 underline">取消</button></div>' : ''}
+                    
+                    <div class="flex gap-2 mb-4 bg-slate-50 p-1 rounded-xl">
+                        <button onclick="window.app.state.type='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.type==='expense'?'bg-white text-rose-500 shadow-sm':'text-slate-400'}">支出</button>
+                        <button onclick="window.app.state.type='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.type==='income'?'bg-white text-emerald-500 shadow-sm':'text-slate-400'}">收入</button>
                     </div>
-                    <div class="grid grid-cols-4 gap-2">
-                        ${['7','8','9','⌫','4','5','6','/','1','2','3','*','0','.','C','-'].map(b=>`<button onclick="window.app.handleCalc('${b}')" class="calc-btn h-14 bg-white rounded-xl font-bold text-lg text-slate-600 shadow-sm">${b}</button>`).join('')}
-                        <button onclick="window.app.handleCalc('+')" class="calc-btn h-14 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xl">+</button>
-                        <button onclick="window.app.handleCalc('=')" class="calc-btn h-14 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xl">=</button>
-                        <button onclick="window.app.state.homeStep=2; window.app.render();" class="col-span-2 h-14 bg-indigo-600 text-white rounded-xl font-black shadow-lg">${isEditing ? '下一步 (修改)' : '下一步'}</button>
-                    </div>
-                </div>`;
-            } else {
-                container.innerHTML = `
-                <div class="p-5 animate-up">
-                    <button onclick="window.app.state.homeStep=1; window.app.render();" class="flex items-center gap-1 text-indigo-600 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回金額</button>
-                    ${isEditing ? '<div class="mb-4 text-center"><span class="text-[10px] font-black text-amber-500 bg-amber-100 px-3 py-1 rounded-full">請選擇新類別 (或保持原樣)</span></div>' : ''}
-                    <div class="grid grid-cols-3 gap-3 mb-6">
-                        ${cats.map(c=>`
-                            <button onclick="window.app.state.selectedMainCat=${JSON.stringify(c).replace(/"/g, '&quot;')}; window.app.render();" class="p-4 rounded-3xl border-2 transition flex flex-col items-center gap-1 ${s.selectedMainCat?.id===c.id?'border-indigo-600 bg-indigo-50':'border-transparent bg-white shadow-sm'}">
-                                <span class="text-3xl">${c.icon}</span>
-                                <span class="text-[10px] font-bold text-slate-500">${c.name}</span>
-                            </button>`).join('')}
-                    </div>
-                    ${s.selectedMainCat ? `<div class="bg-slate-900 p-5 rounded-[2.5rem] animate-up grid grid-cols-2 gap-2">
-                        ${s.selectedMainCat.subCategories.map(sub=>`<button onclick="window.app.saveRecord('${sub}')" class="py-3 bg-white/10 text-white rounded-xl font-bold text-[11px]">${sub}</button>`).join('')}
-                    </div>` : ''}
-                </div>`;
-            }
+                    <div id="amount-text" class="num-font text-5xl font-bold text-right py-4 text-slate-800 tracking-tighter">$${s.amount}</div>
+                    <input type="text" placeholder="📝 備註..." oninput="window.app.state.note=this.value" value="${s.note}" class="w-full bg-slate-50 rounded-xl py-3 px-4 text-xs font-bold border-none" />
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    ${['7','8','9','⌫','4','5','6','/','1','2','3','*','0','.','C','-'].map(b=>`<button onclick="window.app.handleCalc('${b}')" class="calc-btn h-14 bg-white rounded-xl font-bold text-lg text-slate-600 shadow-sm">${b}</button>`).join('')}
+                    <button onclick="window.app.handleCalc('+')" class="calc-btn h-14 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xl">+</button>
+                    <button onclick="window.app.handleCalc('=')" class="calc-btn h-14 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xl">=</button>
+                    <button onclick="window.app.state.homeStep=2; window.app.render();" class="col-span-2 h-14 bg-indigo-600 text-white rounded-xl font-black shadow-lg">${isEditing ? '下一步 (修改)' : '下一步'}</button>
+                </div>
+            ` : `
+                <button onclick="window.app.state.homeStep=1; window.app.render();" class="flex items-center gap-1 text-indigo-600 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回金額</button>
+                ${isEditing ? '<div class="mb-4 text-center"><span class="text-[10px] font-black text-amber-500 bg-amber-100 px-3 py-1 rounded-full">請選擇新類別 (或保持原樣)</span></div>' : ''}
+                <div class="grid grid-cols-3 gap-3 mb-6">
+                    ${cats.map(c=>`
+                        <button onclick="window.app.state.selectedMainCat=${JSON.stringify(c).replace(/"/g, '&quot;')}; window.app.render();" class="p-4 rounded-3xl border-2 transition flex flex-col items-center gap-1 ${s.selectedMainCat?.id===c.id?'border-indigo-600 bg-indigo-50':'border-transparent bg-white shadow-sm'}">
+                            <span class="text-3xl">${c.icon}</span>
+                            <span class="text-[10px] font-bold text-slate-500">${c.name}</span>
+                        </button>`).join('')}
+                </div>
+                ${s.selectedMainCat ? `<div class="bg-slate-900 p-5 rounded-[2.5rem] animate-up grid grid-cols-2 gap-2">
+                    ${s.selectedMainCat.subCategories.map(sub=>`<button onclick="window.app.saveRecord('${sub}')" class="py-3 bg-white/10 text-white rounded-xl font-bold text-[11px]">${sub}</button>`).join('')}
+                </div>` : ''}
+            `;
+
+            container.innerHTML = `<div class="flex-1 overflow-y-auto p-5 animate-up pb-24">${inner}</div>`;
         },
 
         getMonthSelectorHTML() {
@@ -316,42 +309,48 @@
             const totalExp = filtered.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
             const totalInc = filtered.filter(t=>t.type==='income').reduce((a,b)=>a+b.amount,0);
 
-            container.innerHTML = `<div class="p-5 animate-up pb-20">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-black text-slate-800">帳目明細</h2>
-                    <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 shadow-md"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>匯出 XLSX</button>
-                </div>
-                
-                ${this.getMonthSelectorHTML()}
+            // 修改: 使用 Flex-col 將標題區 (shrink-0) 與 列表區 (flex-1) 分開
+            container.innerHTML = `
+            <div class="flex flex-col h-full animate-up">
+                <div class="p-5 pb-2 shrink-0 z-10 bg-[#f8fafc]">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-black text-slate-800">帳目明細</h2>
+                        <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 shadow-md"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>匯出 XLSX</button>
+                    </div>
+                    
+                    ${this.getMonthSelectorHTML()}
 
-                <div class="flex gap-2 mb-4">
-                     <div class="flex-1 bg-rose-50 p-3 rounded-xl">
-                        <p class="text-[9px] text-rose-400 font-bold mb-1">總支出</p>
-                        <p class="text-lg font-black text-rose-600 num-font">$${totalExp.toLocaleString()}</p>
-                     </div>
-                     <div class="flex-1 bg-emerald-50 p-3 rounded-xl">
-                        <p class="text-[9px] text-emerald-400 font-bold mb-1">總收入</p>
-                        <p class="text-lg font-black text-emerald-600 num-font">$${totalInc.toLocaleString()}</p>
-                     </div>
+                    <div class="flex gap-2 mb-2">
+                        <div class="flex-1 bg-rose-50 p-3 rounded-xl">
+                            <p class="text-[9px] text-rose-400 font-bold mb-1">總支出</p>
+                            <p class="text-lg font-black text-rose-600 num-font">$${totalExp.toLocaleString()}</p>
+                        </div>
+                        <div class="flex-1 bg-emerald-50 p-3 rounded-xl">
+                            <p class="text-[9px] text-emerald-400 font-bold mb-1">總收入</p>
+                            <p class="text-lg font-black text-emerald-600 num-font">$${totalInc.toLocaleString()}</p>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="space-y-2">
-                    ${filtered.length === 0 ? `<div class="text-center py-10 text-slate-300 text-xs font-bold">本月無資料</div>` : 
-                    filtered.map(t=>`
-                        <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
-                            <div>
-                                <div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-sm">${t.subCat}</span><span class="text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded font-bold">${t.mainCatName}</span></div>
-                                <p class="text-[9px] text-indigo-400 font-bold num-font mt-1">${t.dateString} ${t.timeString}</p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <div class="text-right mr-2">
-                                    <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.type==='income'?'+':'-'}${t.amount.toLocaleString()}</p>
-                                    <p class="text-[8px] text-slate-300 italic truncate max-w-[80px]">${t.note || ''}</p>
+                <div class="flex-1 overflow-y-auto p-5 pt-2 pb-24 no-scrollbar">
+                    <div class="space-y-2">
+                        ${filtered.length === 0 ? `<div class="text-center py-10 text-slate-300 text-xs font-bold">本月無資料</div>` : 
+                        filtered.map(t=>`
+                            <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
+                                <div>
+                                    <div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-sm">${t.subCat}</span><span class="text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded font-bold">${t.mainCatName}</span></div>
+                                    <p class="text-[9px] text-indigo-400 font-bold num-font mt-1">${t.dateString} ${t.timeString}</p>
                                 </div>
-                                <button onclick="window.app.editTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
-                                <button onclick="window.app.deleteTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
-                            </div>
-                        </div>`).join('')}
+                                <div class="flex items-center gap-2">
+                                    <div class="text-right mr-2">
+                                        <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.type==='income'?'+':'-'}${t.amount.toLocaleString()}</p>
+                                        <p class="text-[8px] text-slate-300 italic truncate max-w-[80px]">${t.note || ''}</p>
+                                    </div>
+                                    <button onclick="window.app.editTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="window.app.deleteTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                </div>
+                            </div>`).join('')}
+                    </div>
                 </div>
             </div>`;
         },
@@ -361,31 +360,36 @@
             const filtered = this.getFilteredTransactions().filter(t => t.type === s.statsType);
             const total = filtered.reduce((acc, t) => acc + t.amount, 0);
 
+            // 鑽取頁面 (列表捲動)
             if (s.statsDetailCategory) {
                 const catTxs = filtered.filter(t => t.mainCatName === s.statsDetailCategory);
                 container.innerHTML = `
-                <div class="p-5 animate-up pb-20">
-                    <button onclick="window.app.state.statsDetailCategory=null; window.app.render();" class="flex items-center gap-1 text-indigo-600 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回圖表</button>
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-black text-slate-800">${s.statsDetailCategory}</h2>
-                        <span class="num-font font-bold text-slate-500">$${catTxs.reduce((a,b)=>a+b.amount,0).toLocaleString()}</span>
+                <div class="flex flex-col h-full animate-up">
+                    <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
+                        <button onclick="window.app.state.statsDetailCategory=null; window.app.render();" class="flex items-center gap-1 text-indigo-600 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回圖表</button>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg font-black text-slate-800">${s.statsDetailCategory}</h2>
+                            <span class="num-font font-bold text-slate-500">$${catTxs.reduce((a,b)=>a+b.amount,0).toLocaleString()}</span>
+                        </div>
                     </div>
-                    <div class="space-y-2">
-                        ${catTxs.length === 0 ? `<div class="text-center py-10 text-slate-300 text-xs font-bold">無資料</div>` : 
-                        catTxs.map(t=>`
-                            <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
-                                <div>
-                                    <div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-sm">${t.subCat}</span></div>
-                                    <p class="text-[9px] text-indigo-400 font-bold num-font mt-1">${t.dateString} ${t.timeString}</p>
-                                </div>
-                                <div class="flex items-center gap-4">
-                                    <div class="text-right">
-                                        <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.amount.toLocaleString()}</p>
-                                        <p class="text-[8px] text-slate-300 italic truncate max-w-[80px]">${t.note || ''}</p>
+                    <div class="flex-1 overflow-y-auto p-5 pt-0 pb-24 no-scrollbar">
+                        <div class="space-y-2">
+                            ${catTxs.length === 0 ? `<div class="text-center py-10 text-slate-300 text-xs font-bold">無資料</div>` : 
+                            catTxs.map(t=>`
+                                <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
+                                    <div>
+                                        <div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-sm">${t.subCat}</span></div>
+                                        <p class="text-[9px] text-indigo-400 font-bold num-font mt-1">${t.dateString} ${t.timeString}</p>
                                     </div>
-                                    <button onclick="window.app.deleteTx('${t.id}')" class="text-slate-200 hover:text-rose-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                                </div>
-                            </div>`).join('')}
+                                    <div class="flex items-center gap-4">
+                                        <div class="text-right">
+                                            <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.amount.toLocaleString()}</p>
+                                            <p class="text-[8px] text-slate-300 italic truncate max-w-[80px]">${t.note || ''}</p>
+                                        </div>
+                                        <button onclick="window.app.deleteTx('${t.id}')" class="text-slate-200 hover:text-rose-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
+                                </div>`).join('')}
+                        </div>
                     </div>
                 </div>`;
                 return;
@@ -393,42 +397,47 @@
 
             const groups = filtered.reduce((acc, t) => { acc[t.mainCatName] = (acc[t.mainCatName] || 0) + t.amount; return acc; }, {});
             const sorted = Object.entries(groups).sort((a,b) => b[1] - a[1]);
-            
             const colors = ['#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#3b82f6', '#ef4444', '#10b981'];
 
-            container.innerHTML = `<div class="p-5 animate-up pb-20">
-                ${this.getMonthSelectorHTML()}
-                
-                <div class="flex gap-2 mb-4 bg-white p-1 rounded-xl shadow-sm">
-                    <button onclick="window.app.state.statsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.statsType==='expense'?'bg-rose-500 text-white shadow-md':'text-slate-400'}">支出</button>
-                    <button onclick="window.app.state.statsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.statsType==='income'?'bg-emerald-500 text-white shadow-md':'text-slate-400'}">收入</button>
-                </div>
+            // 主分析頁 (圖表固定，下方類別列表捲動)
+            container.innerHTML = `
+            <div class="flex flex-col h-full animate-up">
+                <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
+                    ${this.getMonthSelectorHTML()}
+                    
+                    <div class="flex gap-2 mb-4 bg-white p-1 rounded-xl shadow-sm">
+                        <button onclick="window.app.state.statsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.statsType==='expense'?'bg-rose-500 text-white shadow-md':'text-slate-400'}">支出</button>
+                        <button onclick="window.app.state.statsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.statsType==='income'?'bg-emerald-500 text-white shadow-md':'text-slate-400'}">收入</button>
+                    </div>
 
-                <div class="bg-white p-4 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6 relative">
-                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none flex-col pt-4">
-                        <span class="text-[10px] text-slate-400 font-bold">Total</span>
-                        <span class="text-xl font-black text-slate-700 num-font">$${total.toLocaleString()}</span>
-                     </div>
-                     <canvas id="statsChart" class="max-h-[220px]"></canvas>
-                </div>
-
-                <div class="space-y-4">
-                    ${sorted.length === 0 ? `<div class="text-center py-5 text-slate-300 text-xs font-bold">無數據可分析</div>` :
-                    sorted.map(([n, v], idx) => `
-                    <div onclick="window.app.state.statsDetailCategory='${n}'; window.app.render();" class="bg-white p-3 rounded-xl border border-slate-50 flex items-center gap-3 active:scale-95 transition cursor-pointer hover:bg-slate-50">
-                        <div class="w-3 h-3 rounded-full shrink-0" style="background-color: ${colors[idx % colors.length]}"></div>
-                        <div class="flex-1 space-y-1">
-                            <div class="flex justify-between text-[11px] font-black text-slate-600">
-                                <span>${n} <span class="text-[9px] text-indigo-300 ml-1 font-normal">(點擊查看)</span></span>
-                                <span>$${v.toLocaleString()}</span>
-                            </div>
-                            <div class="text-[9px] text-slate-400 font-bold text-right">${Math.round(v/total*100)}%</div>
+                    <div class="bg-white p-4 rounded-[2.5rem] shadow-sm border border-slate-100 mb-4 relative">
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none flex-col pt-4">
+                            <span class="text-[10px] text-slate-400 font-bold">Total</span>
+                            <span class="text-xl font-black text-slate-700 num-font">$${total.toLocaleString()}</span>
                         </div>
-                    </div>`).join('')}
+                        <canvas id="statsChart" class="max-h-[180px]"></canvas>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-5 pt-0 pb-24 no-scrollbar">
+                    <div class="space-y-4">
+                        ${sorted.length === 0 ? `<div class="text-center py-5 text-slate-300 text-xs font-bold">無數據可分析</div>` :
+                        sorted.map(([n, v], idx) => `
+                        <div onclick="window.app.state.statsDetailCategory='${n}'; window.app.render();" class="bg-white p-3 rounded-xl border border-slate-50 flex items-center gap-3 active:scale-95 transition cursor-pointer hover:bg-slate-50">
+                            <div class="w-3 h-3 rounded-full shrink-0" style="background-color: ${colors[idx % colors.length]}"></div>
+                            <div class="flex-1 space-y-1">
+                                <div class="flex justify-between text-[11px] font-black text-slate-600">
+                                    <span>${n} <span class="text-[9px] text-indigo-300 ml-1 font-normal">(點擊查看)</span></span>
+                                    <span>$${v.toLocaleString()}</span>
+                                </div>
+                                <div class="text-[9px] text-slate-400 font-bold text-right">${Math.round(v/total*100)}%</div>
+                            </div>
+                        </div>`).join('')}
+                    </div>
                 </div>
             </div>`;
 
-            if (sorted.length > 0) {
+            if (sorted.length > 0 && !s.statsDetailCategory) {
                 if (chartInstance) chartInstance.destroy();
                 setTimeout(() => {
                     const ctx = document.getElementById('statsChart');
@@ -457,35 +466,40 @@
                 .filter(c => c.type === s.settingsType)
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
 
+            // 分類頁 (上方按鈕固定，分類列表捲動)
             container.innerHTML = `
-                <div class="p-5 animate-up pb-20">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-black text-slate-800">分類管理</h2>
-                        <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><i data-lucide="plus" class="w-5 h-5"></i></button>
+                <div class="flex flex-col h-full animate-up">
+                    <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg font-black text-slate-800">分類管理</h2>
+                            <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><i data-lucide="plus" class="w-5 h-5"></i></button>
+                        </div>
+
+                        <div class="flex gap-2 mb-4 bg-white p-1 rounded-xl shadow-sm border border-slate-100">
+                            <button onclick="window.app.state.settingsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.settingsType==='expense'?'bg-rose-50 text-rose-600 shadow-sm ring-1 ring-rose-100':'text-slate-400 hover:bg-slate-50'}">支出項目</button>
+                            <button onclick="window.app.state.settingsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.settingsType==='income'?'bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-emerald-100':'text-slate-400 hover:bg-slate-50'}">收入項目</button>
+                        </div>
+
+                        ${s.isAdding ? `<div class="bg-white p-5 rounded-[2rem] shadow-xl border border-indigo-50 mb-4 space-y-4 animate-up relative z-20">
+                            <div class="flex gap-3"><input id="new-cat-icon" placeholder="圖示" class="w-16 bg-slate-50 p-3 rounded-xl text-center text-xl" maxlength="2"/><input id="new-cat-name" placeholder="名稱" class="flex-1 bg-slate-50 p-3 rounded-xl text-xs font-bold"/></div>
+                            <div class="text-[10px] font-bold text-slate-400 pl-1">類別：${s.settingsType==='expense'?'支出':'收入'}</div>
+                            <input id="new-cat-subs" placeholder="子類別 (以逗號隔開)" class="w-full bg-slate-50 p-3 rounded-xl text-xs font-bold"/>
+                            <div class="flex gap-2 pt-2"><button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs">儲存</button><button onclick="window.app.state.isAdding=false; window.app.render();" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-bold text-xs">取消</button></div>
+                        </div>` : ''}
                     </div>
 
-                    <div class="flex gap-2 mb-6 bg-white p-1 rounded-xl shadow-sm border border-slate-100">
-                        <button onclick="window.app.state.settingsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.settingsType==='expense'?'bg-rose-50 text-rose-600 shadow-sm ring-1 ring-rose-100':'text-slate-400 hover:bg-slate-50'}">支出項目</button>
-                        <button onclick="window.app.state.settingsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.settingsType==='income'?'bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-emerald-100':'text-slate-400 hover:bg-slate-50'}">收入項目</button>
-                    </div>
-
-                    ${s.isAdding ? `<div class="bg-white p-5 rounded-[2rem] shadow-xl border border-indigo-50 mb-6 space-y-4 animate-up">
-                        <div class="flex gap-3"><input id="new-cat-icon" placeholder="圖示" class="w-16 bg-slate-50 p-3 rounded-xl text-center text-xl" maxlength="2"/><input id="new-cat-name" placeholder="名稱" class="flex-1 bg-slate-50 p-3 rounded-xl text-xs font-bold"/></div>
-                        <div class="text-[10px] font-bold text-slate-400 pl-1">類別：${s.settingsType==='expense'?'支出':'收入'}</div>
-                        <input id="new-cat-subs" placeholder="子類別 (以逗號隔開)" class="w-full bg-slate-50 p-3 rounded-xl text-xs font-bold"/>
-                        <div class="flex gap-2 pt-2"><button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs">儲存</button><button onclick="window.app.state.isAdding=false; window.app.render();" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-bold text-xs">取消</button></div>
-                    </div>` : ''}
-
-                    <div id="sortable-list" class="space-y-2 pb-10">
-                        ${cats.map(c => `
-                            <div data-id="${c.id}" class="bg-white p-3 pr-4 rounded-2xl flex items-center shadow-sm border border-slate-50 cursor-pointer active:scale-[0.99] transition group select-none">
-                                <div class="drag-handle px-3 text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-500"><i data-lucide="grip-vertical" class="w-5 h-5"></i></div>
-                                <div onclick="window.app.editCat('${c.id}')" class="flex-1 flex items-center gap-4">
-                                    <span class="text-2xl">${c.icon}</span>
-                                    <p class="font-bold text-sm text-slate-700">${c.name}</p>
-                                </div>
-                                <button onclick="window.app.deleteCat('${c.id}')" class="text-slate-200 hover:text-rose-400 p-2 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                            </div>`).join('')}
+                    <div class="flex-1 overflow-y-auto p-5 pt-0 pb-24 no-scrollbar">
+                        <div id="sortable-list" class="space-y-2">
+                            ${cats.map(c => `
+                                <div data-id="${c.id}" class="bg-white p-3 pr-4 rounded-2xl flex items-center shadow-sm border border-slate-50 cursor-pointer active:scale-[0.99] transition group select-none">
+                                    <div class="drag-handle px-3 text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-500"><i data-lucide="grip-vertical" class="w-5 h-5"></i></div>
+                                    <div onclick="window.app.editCat('${c.id}')" class="flex-1 flex items-center gap-4">
+                                        <span class="text-2xl">${c.icon}</span>
+                                        <p class="font-bold text-sm text-slate-700">${c.name}</p>
+                                    </div>
+                                    <button onclick="window.app.deleteCat('${c.id}')" class="text-slate-200 hover:text-rose-400 p-2 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>`).join('')}
+                        </div>
                     </div>
                 </div>`;
 
@@ -568,7 +582,6 @@
         async deleteTx(id) { if (confirm('刪除此帳目？')) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'transactions', id)); }
     };
 
-    // 修改: 立即呼叫一次，確保登入畫面的 Logo 會顯示
     lucide.createIcons();
 
     onAuthStateChanged(auth, async (user) => {
