@@ -554,11 +554,14 @@
         },
 
         async saveCategory() {
-            const name = document.getElementById('new-cat-name').value, icon = document.getElementById('new-cat-icon').value || '📁';
+            const name = document.getElementById('new-cat-name').value;
+            const icon = document.getElementById('new-cat-icon').value || '📁';
             const subs = document.getElementById('new-cat-subs').value;
             const type = this.state.settingsType; 
             
             if (!name) return alert('必填名稱');
+            
+            // 為了防止連點，這裡可以先簡單鎖住 UI (選用)，但最重要的是下面那行 await
             
             const id = this.state.editingCatId || ('cat_' + Date.now());
             
@@ -581,10 +584,15 @@
                 data.order = old ? (old.order || 0) : 0;
             }
 
+            // 1. 等待寫入資料庫
             await setDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id), data);
             
+            // 2. 寫入完成後，立刻重置狀態並關閉視窗
             this.state.isAdding = false;
             this.state.editingCatId = null;
+
+            // 3. 關鍵修正：手動呼叫 render，讓畫面馬上更新 (關閉彈窗)
+            this.render();
         },
 
         async deleteCat(id) { if (confirm('刪除分類？')) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id)); },
