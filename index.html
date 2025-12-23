@@ -30,7 +30,6 @@
             position: relative;
         }
         
-        /* 修改: 這裡改為 hidden，讓捲動行為由內層控制 */
         .content-area { 
             flex: 1; 
             overflow: hidden; 
@@ -48,11 +47,23 @@
         .sortable-ghost { opacity: 0.4; background: #e0e7ff; }
         .sortable-drag { cursor: grabbing; opacity: 1; background: white; transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         
-        .editing-mode { border: 2px solid #f59e0b; }
-
-        /* 自定義捲軸樣式 (隱藏捲軸但保留功能，讓畫面更乾淨) */
+        /* 自定義捲軸樣式 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 日期輸入框樣式優化 */
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            background: transparent;
+            bottom: 0;
+            color: transparent;
+            cursor: pointer;
+            height: auto;
+            left: 0;
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: auto;
+        }
     </style>
 </head>
 <body>
@@ -108,6 +119,12 @@
     let unsubTx = null, unsubCat = null;
     let chartInstance = null;
 
+    // 輔助：取得本地時間的 datetime-local 字串 (YYYY-MM-DDTHH:mm)
+    const getLocalISOString = (date) => {
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+    };
+
     window.app = {
         state: {
             user: null, activeTab: 'home', transactions: [], categories: [],
@@ -117,7 +134,8 @@
             viewDate: new Date(),
             settingsType: 'expense',
             statsDetailCategory: null,
-            editingTxId: null
+            editingTxId: null,
+            selectedDate: getLocalISOString(new Date()) // 新增：用於編輯時間
         },
 
         switchTab(tab) {
@@ -133,11 +151,11 @@
                      this.state.note = '';
                      this.state.homeStep = 1;
                      this.state.selectedMainCat = null;
+                     this.state.selectedDate = getLocalISOString(new Date()); // 重置為現在
                  }
             }
 
             this.render();
-            // 切換時不需要 scroll to top，因為現在是內部容器在捲動
         },
 
         changeMonth(offset) {
@@ -193,6 +211,9 @@
             s.note = tx.note || '';
             s.type = tx.type;
             
+            // 設定時間為該筆帳目的時間
+            s.selectedDate = getLocalISOString(new Date(tx.timestamp));
+            
             const cat = s.categories.find(c => c.id === tx.mainCatId) || 
                         s.categories.find(c => c.name === tx.mainCatName && c.type === tx.type);
             
@@ -207,6 +228,7 @@
             this.state.amount = '0';
             this.state.note = '';
             this.state.selectedMainCat = null;
+            this.state.selectedDate = getLocalISOString(new Date());
             this.render();
         },
 
@@ -214,13 +236,20 @@
             const s = this.state;
             const collectionRef = collection(db, 'artifacts', appId, 'users', s.user.uid, 'transactions');
             
+            // 使用選擇的時間
+            const recordDate = new Date(s.selectedDate);
+            
             const data = {
                 amount: parseFloat(s.amount), 
                 note: s.note,
                 mainCatId: s.selectedMainCat.id, 
                 mainCatName: s.selectedMainCat.name,
                 subCat: sub, 
-                type: s.type
+                type: s.type,
+                // 更新時間欄位
+                timestamp: recordDate.getTime(),
+                dateString: recordDate.toLocaleDateString('zh-TW'),
+                timeString: recordDate.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' })
             };
 
             if (s.editingTxId) {
@@ -228,14 +257,11 @@
                 await updateDoc(docRef, data);
                 s.editingTxId = null; 
             } else {
-                const now = new Date();
-                data.timestamp = now.getTime();
-                data.dateString = now.toLocaleDateString('zh-TW');
-                data.timeString = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 await addDoc(collectionRef, data);
             }
 
             s.amount = '0'; s.note = ''; s.homeStep = 1; s.selectedMainCat = null;
+            s.selectedDate = getLocalISOString(new Date()); // Reset time
             this.switchTab('history');
         },
 
@@ -258,10 +284,26 @@
             const cats = s.categories.filter(c=>c.type===s.type).sort((a,b)=>(a.order||0)-(b.order||0));
             const isEditing = !!s.editingTxId;
 
-            // Home 頁面雖然通常不需要內捲動，但為了避免小螢幕被切到，我們還是用 flex-1 overflow-y-auto 包起來
             const inner = s.homeStep === 1 ? `
                 <div class="bg-white rounded-[2rem] p-5 shadow-sm border ${isEditing ? 'border-amber-400 bg-amber-50' : 'border-slate-100'} mb-4 transition-colors">
-                    ${isEditing ? '<div class="flex justify-between items-center mb-2"><span class="text-[10px] font-black text-amber-500 bg-amber-100 px-2 py-1 rounded">編輯模式</span><button onclick="window.app.cancelEdit()" class="text-[10px] text-slate-400 underline">取消</button></div>' : ''}
+                    
+                    <div class="flex justify-between items-center mb-2">
+                        ${isEditing ? '<span class="text-[10px] font-black text-amber-500 bg-amber-100 px-2 py-1 rounded">編輯模式</span>' : '<div></div>'}
+                        
+                        <div class="relative group">
+                            <div class="flex items-center gap-1.5 bg-slate-100 hover:bg-indigo-50 px-3 py-1.5 rounded-full transition cursor-pointer">
+                                <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500"></i>
+                                <span class="text-[10px] font-bold text-slate-500 group-hover:text-indigo-600 num-font tracking-tight">
+                                    ${s.selectedDate.replace('T', ' ')}
+                                </span>
+                            </div>
+                            <input type="datetime-local" 
+                                   value="${s.selectedDate}" 
+                                   onchange="window.app.state.selectedDate = this.value; window.app.render();"
+                                   class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        </div>
+                    </div>
+                     ${isEditing ? '<div class="flex justify-end mb-2"><button onclick="window.app.cancelEdit()" class="text-[10px] text-slate-400 underline">取消</button></div>' : ''}
                     
                     <div class="flex gap-2 mb-4 bg-slate-50 p-1 rounded-xl">
                         <button onclick="window.app.state.type='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.type==='expense'?'bg-white text-rose-500 shadow-sm':'text-slate-400'}">支出</button>
@@ -309,7 +351,6 @@
             const totalExp = filtered.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
             const totalInc = filtered.filter(t=>t.type==='income').reduce((a,b)=>a+b.amount,0);
 
-            // 修改: 使用 Flex-col 將標題區 (shrink-0) 與 列表區 (flex-1) 分開
             container.innerHTML = `
             <div class="flex flex-col h-full animate-up">
                 <div class="p-5 pb-2 shrink-0 z-10 bg-[#f8fafc]">
@@ -386,7 +427,10 @@
                                             <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.amount.toLocaleString()}</p>
                                             <p class="text-[8px] text-slate-300 italic truncate max-w-[80px]">${t.note || ''}</p>
                                         </div>
-                                        <button onclick="window.app.deleteTx('${t.id}')" class="text-slate-200 hover:text-rose-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                        <div class="flex gap-2">
+                                            <button onclick="window.app.editTx('${t.id}')" class="text-slate-200 hover:text-indigo-400"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                                            <button onclick="window.app.deleteTx('${t.id}')" class="text-slate-200 hover:text-rose-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                        </div>
                                     </div>
                                 </div>`).join('')}
                         </div>
@@ -399,7 +443,7 @@
             const sorted = Object.entries(groups).sort((a,b) => b[1] - a[1]);
             const colors = ['#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#3b82f6', '#ef4444', '#10b981'];
 
-            // 主分析頁 (圖表固定，下方類別列表捲動)
+            // 主分析頁
             container.innerHTML = `
             <div class="flex flex-col h-full animate-up">
                 <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
@@ -505,13 +549,9 @@
                     </div>
                 </div>`;
 
-            // 修改重點：這裡多加了 && s.isAdding 判斷
-            // 只有在「新增模式開啟」且「有編輯ID」時，才去抓取 DOM 元素填值
-            // 這樣就避免了因為找不到元素而報錯，進而導致圖示消失的問題
             if (s.isAdding && s.editingCatId) {
                 const cat = s.categories.find(c => c.id === s.editingCatId);
                 if (cat) {
-                    // 因為有用 s.isAdding 保護，這裡保證 new-cat-icon 一定存在
                     const iconInput = document.getElementById('new-cat-icon');
                     if (iconInput) {
                         iconInput.value = cat.icon;
@@ -561,8 +601,6 @@
             
             if (!name) return alert('必填名稱');
             
-            // 為了防止連點，這裡可以先簡單鎖住 UI (選用)，但最重要的是下面那行 await
-            
             const id = this.state.editingCatId || ('cat_' + Date.now());
             
             let order = 0;
@@ -584,14 +622,10 @@
                 data.order = old ? (old.order || 0) : 0;
             }
 
-            // 1. 等待寫入資料庫
             await setDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id), data);
             
-            // 2. 寫入完成後，立刻重置狀態並關閉視窗
             this.state.isAdding = false;
             this.state.editingCatId = null;
-
-            // 3. 關鍵修正：手動呼叫 render，讓畫面馬上更新 (關閉彈窗)
             this.render();
         },
 
