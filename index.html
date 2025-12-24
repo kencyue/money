@@ -385,7 +385,7 @@
                                 <div class="flex items-center gap-2">
                                     <div class="text-right mr-2">
                                         <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.type==='income'?'+':'-'}${t.amount.toLocaleString()}</p>
-                                        <p class="text-[8px] text-[#000] text-slate-300 italic truncate max-w-[80px]">${t.note || ''}</p>
+                                        <p class="text-[8px] text-zinc-950 italic truncate max-w-[80px]">${t.note || ''}</p>
                                     </div>
                                     <button onclick="window.app.editTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
                                     <button onclick="window.app.deleteTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
