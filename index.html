@@ -666,6 +666,8 @@
 
     document.getElementById('google-login-btn').onclick = () => signInWithPopup(auth, provider);
     document.getElementById('logout-btn').onclick = () => signOut(auth);
+    // ★★★ 新增這一行：頁面載入時先初始化圖示，這樣登入畫面的圖示才會顯示 ★★★
+    lucide.createIcons();
 </script>
 </body>
 </html>
