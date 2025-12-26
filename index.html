@@ -145,6 +145,7 @@
             
             if (tab !== 'home' || !this.state.editingTxId) {
                  this.state.editingTxId = null;
+                 this.state.editingSubCat = null; // ★★★ 加入這一行重置 ★★★
                  if(tab === 'home') {
                      this.state.amount = '0';
                      this.state.note = '';
@@ -221,7 +222,7 @@
             if (display) display.innerText = `$${s.amount}`;
         },
 
-        editTx(txId) {
+editTx(txId) {
             const s = this.state;
             const tx = s.transactions.find(t => t.id === txId);
             if (!tx) return;
@@ -232,6 +233,9 @@
             s.type = tx.type;
             s.selectedDate = getLocalISOString(new Date(tx.timestamp));
             
+            // ★★★ 新增這一行：紀錄目前編輯的子類別 ★★★
+            s.editingSubCat = tx.subCat; 
+
             const cat = s.categories.find(c => c.id === tx.mainCatId) || 
                         s.categories.find(c => c.name === tx.mainCatName && c.type === tx.type);
             
@@ -343,8 +347,17 @@
                             <span class="text-[10px] font-bold text-slate-500">${c.name}</span>
                         </button>`).join('')}
                 </div>
-                ${s.selectedMainCat ? `<div class="bg-slate-900 p-5 rounded-[2.5rem] animate-up grid grid-cols-2 gap-2">
-                    ${s.selectedMainCat.subCategories.map(sub=>`<button onclick="window.app.saveRecord('${sub}')" class="py-3 bg-white/10 text-white rounded-xl font-bold text-[11px]">${sub}</button>`).join('')}
+${s.selectedMainCat ? `<div class="bg-slate-900 p-5 rounded-[2.5rem] animate-up grid grid-cols-2 gap-2">
+                    ${s.selectedMainCat.subCategories.map(sub => {
+                        // ★★★ 判斷是否為當前編輯的子類別 ★★★
+                        const isCurrentSub = s.editingTxId && s.editingSubCat === sub;
+                        // 如果是，顯示琥珀色(黃色)背景與深色文字；否則維持半透明白字
+                        const btnClass = isCurrentSub 
+                            ? "bg-amber-400 text-slate-900 shadow-md ring-2 ring-amber-200 scale-[1.02]" 
+                            : "bg-white/10 text-white hover:bg-white/20";
+                            
+                        return `<button onclick="window.app.saveRecord('${sub}')" class="py-3 rounded-xl font-bold text-[11px] transition-all ${btnClass}">${sub}</button>`;
+                    }).join('')}
                 </div>` : ''}
             `;
 
