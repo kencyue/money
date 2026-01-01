@@ -51,11 +51,32 @@
         .animate-up { animation: slideUp 0.2s ease-out; }
         @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         
-        .sortable-ghost { opacity: 0.4; background: #e0e7ff; }
-        .sortable-drag { cursor: grabbing; opacity: 1; background: white; transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        
+        /* 捲軸樣式 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Sortable 樣式優化 */
+        .sortable-ghost { opacity: 0.2; background: #e0e7ff; border: 2px dashed #818cf8; }
+        .sortable-drag { opacity: 0; } /* 原生拖曳時隱藏原元素 */
+        
+        /* ★★★ 重點修改：模擬拖曳時的樣式 (forceFallback: true 會用到這個) ★★★ */
+        .sortable-fallback { 
+            opacity: 1 !important; 
+            background: white; 
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); 
+            transform: scale(1.02); 
+            border-radius: 1rem;
+            cursor: grabbing;
+        }
+
+        /* ★★★ 重點修改：拖曳把手禁止觸控捲動 ★★★ */
+        .drag-handle {
+            touch-action: none; 
+            cursor: grab;
+            padding: 10px; /* 增加觸控面積 */
+            margin: -10px 0;
+        }
+        .drag-handle:active { cursor: grabbing; }
 
         /* Flatpickr 客製化樣式 */
         .flatpickr-calendar { 
@@ -145,12 +166,11 @@
             editingSubCat: null 
         },
 
-        // ★★★ 核心修改：重置日期為現在，同時重置檢視月份 ★★★
         resetDateToNow() {
             const now = new Date();
-            this.state.selectedDate = getLocalISOString(now); // 更新記帳時間
-            this.state.viewDate = new Date(now);              // 更新檢視月份
-            this.render();                                    // 重新渲染所有畫面
+            this.state.selectedDate = getLocalISOString(now);
+            this.state.viewDate = new Date(now);
+            this.render();
         },
 
         switchTab(tab) {
@@ -389,7 +409,6 @@
             }
         },
 
-        // ★★★ 修改：移除預設的 mb-4，並設為 flex-1，讓外部容易排版 ★★★
         getMonthSelectorHTML() {
             const dateStr = this.state.viewDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' });
             return `
@@ -405,7 +424,6 @@
             const totalExp = filtered.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
             const totalInc = filtered.filter(t=>t.type==='income').reduce((a,b)=>a+b.amount,0);
 
-            // ★★★ 修改：加入回到今天按鈕 ★★★
             container.innerHTML = `
             <div class="flex flex-col h-full animate-up">
                 <div class="p-5 pb-2 shrink-0 z-10 bg-[#f8fafc]">
@@ -503,7 +521,6 @@
             const sorted = Object.entries(groups).sort((a,b) => b[1] - a[1]);
             const colors = ['#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#3b82f6', '#ef4444', '#10b981'];
 
-            // ★★★ 修改：加入回到今天按鈕 ★★★
             container.innerHTML = `
             <div class="flex flex-col h-full animate-up">
                 <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
@@ -628,11 +645,19 @@
 
             const list = document.getElementById('sortable-list');
             if (list) {
+                // ★★★ SortableJS 設定優化 ★★★
                 new Sortable(list, {
                     handle: '.drag-handle',
-                    animation: 150,
+                    animation: 250,
+                    forceFallback: true, // 關鍵：強制使用 JS 模擬拖曳
+                    fallbackOnBody: true,
+                    scroll: true,
+                    scrollSensitivity: 30,
+                    scrollSpeed: 10,
+                    delay: 0,
                     ghostClass: 'sortable-ghost',
                     dragClass: 'sortable-drag',
+                    onChoose: function() { navigator.vibrate && navigator.vibrate(50); }, // 加入震動
                     onEnd: function (evt) {
                         window.app.updateCategoryOrder();
                     }
