@@ -51,47 +51,60 @@
         .animate-up { animation: slideUp 0.2s ease-out; }
         @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         
-        /* 捲軸樣式 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Sortable 樣式優化 */
-        .sortable-ghost { opacity: 0.2; background: #e0e7ff; border: 2px dashed #818cf8; }
-        .sortable-drag { opacity: 0; } /* 原生拖曳時隱藏原元素 */
+        /* ========================================= */
+        /* ★★★ 拖曳手感優化核心 CSS (修改區) ★★★ */
+        /* ========================================= */
+
+        /* 1. Ghost: 這是「坑」，也就是項目離開原本位置後留下的空位 */
+        .sortable-ghost { 
+            opacity: 0.4 !important; 
+            background: #e0e7ff !important; 
+            border: 2px dashed #818cf8 !important;
+            box-shadow: none !important;
+        }
+
+        /* 2. Drag: 這是「原本的實體」，正在被拖曳時，它應該要隱藏 */
+        /* ★★★ 關鍵：設為 opacity: 0，否則你會看到它卡在原地 ★★★ */
+        .sortable-drag { 
+            opacity: 0 !important; 
+        } 
         
-        /* ★★★ 重點修改：模擬拖曳時的樣式 (forceFallback: true 會用到這個) ★★★ */
+        /* 3. Fallback: 這是「跟著手指動的替身」 */
+        /* ★★★ 關鍵：給它強烈的陰影和白底，讓它看起來是「浮起來的」 ★★★ */
         .sortable-fallback { 
             opacity: 1 !important; 
-            background: white; 
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); 
-            transform: scale(1.02); 
-            border-radius: 1rem;
-            cursor: grabbing;
+            background: #ffffff !important; 
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important; /* 強烈陰影 */
+            transform: scale(1.02) rotate(2deg) !important; /* 微微放大並傾斜，增加手感 */
+            border-radius: 1rem !important;
+            border: 1px solid #e2e8f0 !important;
+            cursor: grabbing !important;
+            pointer-events: none; /* 讓事件穿透，避免卡頓 */
+            z-index: 9999 !important;
         }
 
-        /* ★★★ 重點修改：拖曳把手禁止觸控捲動 ★★★ */
+        /* 把手區域優化 */
         .drag-handle {
-            touch-action: none; 
+            touch-action: none; /* 禁止瀏覽器捲動 */
             cursor: grab;
-            padding: 10px; /* 增加觸控面積 */
-            margin: -10px 0;
+            padding: 12px; /* 增加觸控面積 */
+            margin: -12px 0;
+            color: #cbd5e1;
         }
-        .drag-handle:active { cursor: grabbing; }
+        .drag-handle:active { cursor: grabbing; color: #6366f1; }
 
-        /* Flatpickr 客製化樣式 */
+        /* Flatpickr 樣式 */
         .flatpickr-calendar { 
             border-radius: 16px !important; 
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important; 
             border: none !important; 
             font-family: 'Noto Sans TC', sans-serif !important;
         }
-        .flatpickr-day.selected { 
-            background: #4f46e5 !important; 
-            border-color: #4f46e5 !important; 
-        }
-        .flatpickr-time input:hover, .flatpickr-time .flatpickr-am-pm:hover, .flatpickr-time input:focus, .flatpickr-time .flatpickr-am-pm:focus {
-            background: #f1f5f9;
-        }
+        .flatpickr-day.selected { background: #4f46e5 !important; border-color: #4f46e5 !important; }
+        .flatpickr-time input:hover, .flatpickr-time .flatpickr-am-pm:hover, .flatpickr-time input:focus, .flatpickr-time .flatpickr-am-pm:focus { background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -645,19 +658,18 @@
 
             const list = document.getElementById('sortable-list');
             if (list) {
-                // ★★★ SortableJS 設定優化 ★★★
                 new Sortable(list, {
                     handle: '.drag-handle',
                     animation: 250,
-                    forceFallback: true, // 關鍵：強制使用 JS 模擬拖曳
+                    forceFallback: true, // 保持開啟
                     fallbackOnBody: true,
                     scroll: true,
                     scrollSensitivity: 30,
                     scrollSpeed: 10,
                     delay: 0,
                     ghostClass: 'sortable-ghost',
-                    dragClass: 'sortable-drag',
-                    onChoose: function() { navigator.vibrate && navigator.vibrate(50); }, // 加入震動
+                    dragClass: 'sortable-drag', // 對應 CSS 的 .sortable-drag
+                    onChoose: function() { navigator.vibrate && navigator.vibrate(50); }, 
                     onEnd: function (evt) {
                         window.app.updateCategoryOrder();
                     }
