@@ -172,7 +172,7 @@
     const ALLOWED_USER = "jingsyuan@gmail.com";
     const appId = 'pocket-account-pro-v2';
 
-    // ★★★ 1. 多語系字典 ★★★
+// ★★★ 1. 多語系字典 (優化日文用語) ★★★
     const i18n = {
         'zh-TW': {
             app_name: '口袋記帳', login: '管理員登入', nav_add: '記帳', nav_list: '明細', nav_stats: '分析', nav_cats: '分類',
@@ -197,11 +197,15 @@
             logout: 'Logout', settings_back: 'Back'
         },
         'ja': {
-            app_name: 'ポケット家計簿', login: '管理者ログイン', nav_add: '記帳', nav_list: '明細', nav_stats: '分析', nav_cats: '分類',
+            app_name: 'ポケット家計簿', login: '管理者ログイン', 
+            nav_add: '入力',      // 改為「入力」
+            nav_list: '履歴',     // 改為「履歴」
+            nav_stats: 'レポート', // 改為片假名「Report」
+            nav_cats: 'カテゴリ',  // 改為片假名「Category」
             expense: '支出', income: '収入', note_placeholder: '📝 メモ...', next: '次へ', next_edit: '更新',
             back_amount: '戻る', select_cat_edit: 'カテゴリを選択',
             total_exp: '総支出', total_inc: '総収入', no_data: 'データなし', export: 'XLSX出力',
-            cat_mgmt: 'カテゴリ管理', save: '保存', cancel: '取消', 
+            cat_mgmt: 'カテゴリ管理', save: '保存', cancel: 'キャンセル', 
             cat_name: '名前', cat_icon: 'アイコン', cat_subs: 'サブカテゴリ (カンマ区切り)',
             delete_cat_confirm: '削除しますか？', delete_tx_confirm: '削除しますか？',
             settings_title: '設定', language: '言語', theme: 'テーマ', theme_default: 'システム', theme_dark: 'ダーク', theme_light: 'ライト',
