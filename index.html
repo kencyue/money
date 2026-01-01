@@ -6,15 +6,28 @@
     <title>口袋記帳 Pro</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#0f172a', // 深色背景色
+                        darkcard: '#1e293b' // 深色卡片色
+                    }
+                }
+            }
+        }
+    </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css"> <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/zh-tw.js"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/ja.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@700&display=swap');
@@ -26,67 +39,85 @@
             width: 100vw;
             overflow: hidden; 
             background-color: #f8fafc;
+            transition: background-color 0.3s ease;
         }
+        /* Dark Mode Body */
+        .dark body { background-color: #0f172a; color: #f8fafc; }
+
         .num-font { font-family: 'JetBrains Mono', monospace; }
-        .glass-effect { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        
+        .glass-effect { 
+            background: rgba(255, 255, 255, 0.9); 
+            backdrop-filter: blur(12px); 
+            -webkit-backdrop-filter: blur(12px); 
+        }
+        .dark .glass-effect {
+            background: rgba(30, 41, 59, 0.9);
+            border-bottom-color: #334155;
+            border-top-color: #334155;
+        }
         
         .app-container { height: 100dvh; display: flex; flex-direction: column; position: relative; }
         .content-area { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; }
         
         .calc-btn { transition: transform 0.05s ease; border: 1px solid rgba(0,0,0,0.03); display: flex; align-items: center; justify-content: center; }
         .calc-btn:active { transform: scale(0.92); background-color: #e2e8f0; }
+        .dark .calc-btn { background-color: #1e293b; color: #e2e8f0; border-color: #334155; }
+        .dark .calc-btn:active { background-color: #334155; }
+
         .nav-active { color: #4f46e5; background-color: #f5f3ff; }
+        .dark .nav-active { background-color: #312e81; color: #818cf8; }
+
         .animate-up { animation: slideUp 0.2s ease-out; }
         @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* ========================================= */
-        /* ★★★ 拖曳視覺優化核心 (Modified) ★★★ */
-        /* ========================================= */
-
-        /* 1. Ghost (原本位置的坑): 變成一個純粹的虛線框凹槽，隱藏內部內容 */
+        /* Sortable Styles */
         .sortable-ghost { 
             opacity: 1 !important;
-            background-color: #f1f5f9 !important; /* 淺灰背景 */
-            border: 2px dashed #cbd5e1 !important; /* 虛線框 */
+            background-color: #f1f5f9 !important; 
+            border: 2px dashed #cbd5e1 !important; 
             box-shadow: none !important;
         }
-        
-        /* ★★★ 關鍵：讓坑裡面的文字和圖示消失，只剩下坑本身 ★★★ */
-        .sortable-ghost * { 
-            opacity: 0 !important; 
-            visibility: hidden !important;
+        .dark .sortable-ghost {
+            background-color: #1e293b !important;
+            border-color: #475569 !important;
         }
-
-        /* 2. Drag (原生拖曳元素): 隱藏，完全交給 Fallback 接管 */
+        
+        .sortable-ghost * { opacity: 0 !important; visibility: hidden !important; }
         .sortable-drag { opacity: 0 !important; } 
 
-        /* 3. Fallback (手指上的牌): 實體化，浮起來 */
         .sortable-fallback { 
             opacity: 1 !important; 
             background: #ffffff !important; 
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
-            transform: scale(1.05); /* 稍微放大一點，強調被抓起來的感覺 */
+            transform: scale(1.05); 
             border-radius: 1rem !important;
             border: 1px solid #e2e8f0 !important;
             cursor: grabbing !important;
             pointer-events: none;
-            z-index: 10000 !important; /* 確保在最上層 */
+            z-index: 10000 !important;
+        }
+        .dark .sortable-fallback {
+            background: #1e293b !important;
+            border-color: #475569 !important;
+            color: #f8fafc;
         }
 
-        .drag-handle {
-            touch-action: none; 
-            cursor: grab;
-            padding: 12px;
-            margin: -12px 0;
-            color: #cbd5e1;
-        }
+        .drag-handle { touch-action: none; cursor: grab; padding: 12px; margin: -12px 0; color: #cbd5e1; }
+        .dark .drag-handle { color: #64748b; }
         .drag-handle:active { color: #6366f1; }
 
+        /* Flatpickr Dark Mode Overrides */
         .flatpickr-calendar { border-radius: 16px !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important; border: none !important; font-family: 'Noto Sans TC', sans-serif !important; }
+        .dark .flatpickr-calendar { background: #1e293b; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5) !important; }
         .flatpickr-day.selected { background: #4f46e5 !important; border-color: #4f46e5 !important; }
+        .flatpickr-time input:hover, .flatpickr-time .flatpickr-am-pm:hover { background: #f1f5f9; }
+        .dark .flatpickr-time input:hover, .dark .flatpickr-time .flatpickr-am-pm:hover { background: #334155; color: white; }
+        .dark .flatpickr-day { color: #cbd5e1; }
+        .dark .flatpickr-months .flatpickr-month { color: #cbd5e1; fill: #cbd5e1; }
     </style>
 </head>
 <body>
@@ -95,26 +126,28 @@
         <div class="mb-8 p-6 bg-indigo-500/20 rounded-[2.5rem]"><i data-lucide="shield-check" class="w-16 h-16 text-indigo-400"></i></div>
         <h1 class="text-white text-2xl font-black tracking-tight mb-8 text-center">口袋記帳</h1>
         <button id="google-login-btn" class="w-full max-w-xs bg-white text-slate-900 font-bold py-4 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition shadow-xl">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5"> 管理員登入
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5"> <span id="login-btn-text">管理員登入</span>
         </button>
     </div>
 
-    <div id="app-content" class="hidden app-container max-w-md mx-auto bg-slate-50 relative">
-        <header class="glass-effect shrink-0 px-6 pt-4 pb-3 border-b flex justify-between items-center z-50">
+    <div id="app-content" class="hidden app-container max-w-md mx-auto bg-slate-50 dark:bg-darkbg relative transition-colors duration-300">
+        <header class="glass-effect shrink-0 px-6 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center z-50">
             <div>
-                <h1 class="text-sm font-black text-slate-900 italic tracking-tighter">口袋記帳</h1>
+                <h1 id="app-title" class="text-sm font-black text-slate-900 dark:text-white italic tracking-tighter">口袋記帳</h1>
                 <p id="user-display" class="text-[8px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">Admin</p>
             </div>
-            <button id="logout-btn" class="p-2 bg-slate-100 rounded-lg text-slate-400"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+            <button onclick="window.app.switchTab('global_settings')" class="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-400 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
         </header>
 
         <main id="main-view" class="content-area"></main>
 
-        <nav class="glass-effect fixed bottom-0 left-0 right-0 max-w-md mx-auto border-t flex justify-around p-1 pb-[calc(env(safe-area-inset-bottom)+4px)] z-50">
-            <button onclick="window.app.switchTab('home')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="home"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">記帳</span></button>
-            <button onclick="window.app.switchTab('history')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="history"><i data-lucide="layout-list" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">明細</span></button>
-            <button onclick="window.app.switchTab('stats')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="stats"><i data-lucide="pie-chart" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">分析</span></button>
-            <button onclick="window.app.switchTab('settings')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="settings"><i data-lucide="layers" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">分類</span></button>
+        <nav id="bottom-nav" class="glass-effect fixed bottom-0 left-0 right-0 max-w-md mx-auto border-t border-slate-200 dark:border-slate-700 flex justify-around p-1 pb-[calc(env(safe-area-inset-bottom)+4px)] z-50 transition-colors duration-300">
+            <button onclick="window.app.switchTab('home')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="home"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1" data-t="nav_add">記帳</span></button>
+            <button onclick="window.app.switchTab('history')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="history"><i data-lucide="layout-list" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1" data-t="nav_list">明細</span></button>
+            <button onclick="window.app.switchTab('stats')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="stats"><i data-lucide="pie-chart" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1" data-t="nav_stats">分析</span></button>
+            <button onclick="window.app.switchTab('settings')" class="nav-btn flex-1 flex flex-col items-center py-2 rounded-xl" data-tab="settings"><i data-lucide="layers" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1" data-t="nav_cats">分類</span></button>
         </nav>
     </div>
 
@@ -139,6 +172,43 @@
     const ALLOWED_USER = "jingsyuan@gmail.com";
     const appId = 'pocket-account-pro-v2';
 
+    // ★★★ 1. 多語系字典 ★★★
+    const i18n = {
+        'zh-TW': {
+            app_name: '口袋記帳', login: '管理員登入', nav_add: '記帳', nav_list: '明細', nav_stats: '分析', nav_cats: '分類',
+            expense: '支出', income: '收入', note_placeholder: '📝 備註...', next: '下一步', next_edit: '下一步 (修改)',
+            back_amount: '返回金額', select_cat_edit: '請選擇新類別 (或保持原樣)',
+            total_exp: '總支出', total_inc: '總收入', no_data: '本月無資料', export: '匯出 XLSX',
+            cat_mgmt: '分類管理', save: '儲存', cancel: '取消', 
+            cat_name: '名稱', cat_icon: '圖示', cat_subs: '子類別 (以逗號隔開)',
+            delete_cat_confirm: '刪除分類？', delete_tx_confirm: '刪除此帳目？',
+            settings_title: '設定', language: '語言', theme: '網頁色系', theme_default: '預設 (跟隨系統)', theme_dark: '暗色系', theme_light: '亮色系',
+            logout: '登出', settings_back: '返回'
+        },
+        'en': {
+            app_name: 'Pocket Acc.', login: 'Admin Login', nav_add: 'Add', nav_list: 'List', nav_stats: 'Stats', nav_cats: 'Cats',
+            expense: 'Expense', income: 'Income', note_placeholder: '📝 Note...', next: 'Next', next_edit: 'Update',
+            back_amount: 'Back', select_cat_edit: 'Select Category',
+            total_exp: 'Total Exp', total_inc: 'Total Inc', no_data: 'No Data', export: 'Export XLSX',
+            cat_mgmt: 'Categories', save: 'Save', cancel: 'Cancel', 
+            cat_name: 'Name', cat_icon: 'Icon', cat_subs: 'Sub-cats (comma split)',
+            delete_cat_confirm: 'Delete Category?', delete_tx_confirm: 'Delete Transaction?',
+            settings_title: 'Settings', language: 'Language', theme: 'Theme', theme_default: 'System', theme_dark: 'Dark', theme_light: 'Light',
+            logout: 'Logout', settings_back: 'Back'
+        },
+        'ja': {
+            app_name: 'ポケット家計簿', login: '管理者ログイン', nav_add: '記帳', nav_list: '明細', nav_stats: '分析', nav_cats: '分類',
+            expense: '支出', income: '収入', note_placeholder: '📝 メモ...', next: '次へ', next_edit: '更新',
+            back_amount: '戻る', select_cat_edit: 'カテゴリを選択',
+            total_exp: '総支出', total_inc: '総収入', no_data: 'データなし', export: 'XLSX出力',
+            cat_mgmt: 'カテゴリ管理', save: '保存', cancel: '取消', 
+            cat_name: '名前', cat_icon: 'アイコン', cat_subs: 'サブカテゴリ (カンマ区切り)',
+            delete_cat_confirm: '削除しますか？', delete_tx_confirm: '削除しますか？',
+            settings_title: '設定', language: '言語', theme: 'テーマ', theme_default: 'システム', theme_dark: 'ダーク', theme_light: 'ライト',
+            logout: 'ログアウト', settings_back: '戻る'
+        }
+    };
+
     let unsubTx = null, unsubCat = null;
     let chartInstance = null;
 
@@ -158,7 +228,37 @@
             statsDetailCategory: null,
             editingTxId: null,
             selectedDate: getLocalISOString(new Date()),
-            editingSubCat: null 
+            editingSubCat: null,
+            // ★★★ 2. 設定狀態 ★★★
+            lang: localStorage.getItem('pocket_lang') || 'zh-TW',
+            theme: localStorage.getItem('pocket_theme') || 'default'
+        },
+
+        // ★★★ 3. 翻譯與主題輔助函式 ★★★
+        t(key) { return i18n[this.state.lang][key] || key; },
+        
+        applyTheme() {
+            const t = this.state.theme;
+            const html = document.documentElement;
+            if (t === 'dark') html.classList.add('dark');
+            else if (t === 'light') html.classList.remove('dark');
+            else {
+                if (window.matchMedia('(prefers-color-scheme: dark)').matches) html.classList.add('dark');
+                else html.classList.remove('dark');
+            }
+        },
+
+        setLang(l) { 
+            this.state.lang = l; 
+            localStorage.setItem('pocket_lang', l); 
+            this.render(); 
+        },
+
+        setTheme(t) { 
+            this.state.theme = t; 
+            localStorage.setItem('pocket_theme', t); 
+            this.applyTheme(); 
+            this.render(); // Re-render for UI updates (checks)
         },
 
         resetDateToNow() {
@@ -207,17 +307,89 @@
         render() {
             const main = document.getElementById('main-view');
             const s = this.state;
+            const t = (k) => this.t(k);
             
+            // 更新 App 標題與按鈕文字
+            document.getElementById('app-title').innerText = t('app_name');
+            document.getElementById('login-btn-text').innerText = t('login');
+            
+            // 更新導航列文字
+            document.querySelectorAll('[data-t]').forEach(el => el.innerText = t(el.dataset.t));
+
+            // 顯示/隱藏底部導航 (設定頁面時隱藏)
+            const nav = document.getElementById('bottom-nav');
+            if (s.activeTab === 'global_settings') nav.classList.add('hidden');
+            else nav.classList.remove('hidden');
+
             document.querySelectorAll('.nav-btn').forEach(b => {
-                b.classList.toggle('nav-active', b.dataset.tab === s.activeTab);
-                b.classList.toggle('text-slate-400', b.dataset.tab !== s.activeTab);
+                const isActive = b.dataset.tab === s.activeTab;
+                b.classList.toggle('nav-active', isActive);
+                b.classList.toggle('text-slate-400', !isActive);
+                if (!isActive) b.classList.add('dark:text-slate-500');
             });
 
             if (s.activeTab === 'home') this.renderHome(main);
             else if (s.activeTab === 'history') this.renderHistory(main);
             else if (s.activeTab === 'stats') this.renderStats(main);
             else if (s.activeTab === 'settings') this.renderSettings(main);
+            else if (s.activeTab === 'global_settings') this.renderGlobalSettings(main);
+            
             lucide.createIcons();
+        },
+
+        // ★★★ 4. 新增：全域設定頁面渲染 ★★★
+        renderGlobalSettings(container) {
+            const t = (k) => this.t(k);
+            const s = this.state;
+
+            container.innerHTML = `
+            <div class="flex flex-col h-full animate-up p-5 bg-white dark:bg-darkbg">
+                <div class="flex items-center gap-3 mb-8">
+                    <button onclick="window.app.switchTab('home')" class="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
+                    <h2 class="text-2xl font-black text-slate-800 dark:text-white">${t('settings_title')}</h2>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-slate-50 dark:bg-darkcard p-5 rounded-3xl border border-slate-100 dark:border-slate-700">
+                        <div class="flex items-center gap-2 mb-4 text-slate-500 dark:text-slate-400 font-bold text-sm">
+                            <i data-lucide="globe" class="w-4 h-4"></i> ${t('language')}
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="window.app.setLang('zh-TW')" class="py-2 rounded-xl text-xs font-bold border transition ${s.lang==='zh-TW'?'bg-indigo-600 text-white border-indigo-600':'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-600'}">繁體中文</button>
+                            <button onclick="window.app.setLang('en')" class="py-2 rounded-xl text-xs font-bold border transition ${s.lang==='en'?'bg-indigo-600 text-white border-indigo-600':'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-600'}">English</button>
+                            <button onclick="window.app.setLang('ja')" class="py-2 rounded-xl text-xs font-bold border transition ${s.lang==='ja'?'bg-indigo-600 text-white border-indigo-600':'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-600'}">日本語</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 dark:bg-darkcard p-5 rounded-3xl border border-slate-100 dark:border-slate-700">
+                        <div class="flex items-center gap-2 mb-4 text-slate-500 dark:text-slate-400 font-bold text-sm">
+                            <i data-lucide="palette" class="w-4 h-4"></i> ${t('theme')}
+                        </div>
+                        <div class="space-y-2">
+                            <button onclick="window.app.setTheme('default')" class="w-full flex items-center justify-between p-3 rounded-xl border transition ${s.theme==='default'?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-700':'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600'}">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-200">${t('theme_default')}</span>
+                                ${s.theme==='default'?'<i data-lucide="check" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>':''}
+                            </button>
+                            <button onclick="window.app.setTheme('dark')" class="w-full flex items-center justify-between p-3 rounded-xl border transition ${s.theme==='dark'?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-700':'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600'}">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-200">${t('theme_dark')}</span>
+                                ${s.theme==='dark'?'<i data-lucide="check" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>':''}
+                            </button>
+                            <button onclick="window.app.setTheme('light')" class="w-full flex items-center justify-between p-3 rounded-xl border transition ${s.theme==='light'?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-700':'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600'}">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-200">${t('theme_light')}</span>
+                                ${s.theme==='light'?'<i data-lucide="check" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>':''}
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="logout-btn-settings" class="w-full py-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 font-black rounded-2xl flex items-center justify-center gap-2 mt-10 active:scale-95 transition">
+                        <i data-lucide="log-out" class="w-4 h-4"></i> ${t('logout')}
+                    </button>
+                </div>
+            </div>`;
+            
+            setTimeout(() => {
+                document.getElementById('logout-btn-settings').onclick = () => signOut(auth);
+            }, 0);
         },
 
         handleCalc(val) {
@@ -315,10 +487,10 @@
 
         exportToExcel() {
             const filtered = this.getFilteredTransactions();
-            if (filtered.length === 0) return alert('此月份無帳目');
+            if (filtered.length === 0) return alert(this.t('no_data'));
             const data = filtered.map(t => ({
-                '日期': t.dateString, '時間': t.timeString, '類型': t.type === 'income' ? '收入' : '支出',
-                '主類別': t.mainCatName, '子類別': t.subCat, '金額': t.amount, '備註': t.note || ''
+                'Date': t.dateString, 'Time': t.timeString, 'Type': t.type === 'income' ? 'Income' : 'Expense',
+                'Category': t.mainCatName, 'SubCategory': t.subCat, 'Amount': t.amount, 'Note': t.note || ''
             }));
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
@@ -329,54 +501,55 @@
 
         renderHome(container) {
             const s = this.state;
+            const t = (k) => this.t(k);
             const cats = s.categories.filter(c=>c.type===s.type).sort((a,b)=>(a.order||0)-(b.order||0));
             const isEditing = !!s.editingTxId;
             const displayDate = s.selectedDate.replace('T', ' ');
 
             const inner = s.homeStep === 1 ? `
-                <div class="bg-white rounded-[2rem] p-5 shadow-sm border ${isEditing ? 'border-amber-400 bg-amber-50' : 'border-slate-100'} mb-4 transition-colors">
+                <div class="bg-white dark:bg-darkcard rounded-[2rem] p-5 shadow-sm border ${isEditing ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-100 dark:border-slate-700'} mb-4 transition-colors">
                     
                     <div class="flex justify-between items-center mb-2">
-                        ${isEditing ? '<span class="text-[10px] font-black text-amber-500 bg-amber-100 px-2 py-1 rounded">編輯模式</span>' : '<div></div>'}
+                        ${isEditing ? `<span class="text-[10px] font-black text-amber-500 bg-amber-100 dark:bg-amber-900 px-2 py-1 rounded">EDIT</span>` : '<div></div>'}
                         
                         <div class="flex items-center gap-2">
-                            <div id="flatpickr-trigger" class="flex items-center gap-1.5 bg-slate-100 hover:bg-indigo-50 px-3 py-1.5 rounded-full transition cursor-pointer active:scale-95">
-                                <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500"></i>
-                                <span id="date-display-text" class="text-[10px] font-bold text-slate-500 group-hover:text-indigo-600 num-font tracking-tight">
+                            <div id="flatpickr-trigger" class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-600 px-3 py-1.5 rounded-full transition cursor-pointer active:scale-95">
+                                <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-slate-400 dark:text-slate-300"></i>
+                                <span id="date-display-text" class="text-[10px] font-bold text-slate-500 dark:text-slate-200 num-font tracking-tight">
                                     ${displayDate}
                                 </span>
                             </div>
-                            <button onclick="window.app.resetDateToNow()" class="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-indigo-100 hover:text-indigo-600 active:scale-90 transition" title="回到現在">
+                            <button onclick="window.app.resetDateToNow()" class="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 hover:text-indigo-600 active:scale-90 transition">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
                     </div>
-                     ${isEditing ? '<div class="flex justify-end mb-2"><button onclick="window.app.cancelEdit()" class="text-[10px] text-slate-400 underline">取消</button></div>' : ''}
+                     ${isEditing ? `<div class="flex justify-end mb-2"><button onclick="window.app.cancelEdit()" class="text-[10px] text-slate-400 dark:text-slate-500 underline">${t('cancel')}</button></div>` : ''}
                     
-                    <div class="flex gap-2 mb-4 bg-slate-50 p-1 rounded-xl">
-                        <button onclick="window.app.state.type='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.type==='expense'?'bg-white text-rose-500 shadow-sm':'text-slate-400'}">支出</button>
-                        <button onclick="window.app.state.type='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.type==='income'?'bg-white text-emerald-500 shadow-sm':'text-slate-400'}">收入</button>
+                    <div class="flex gap-2 mb-4 bg-slate-50 dark:bg-slate-800 p-1 rounded-xl">
+                        <button onclick="window.app.state.type='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] transition ${s.type==='expense'?'bg-white dark:bg-slate-700 text-rose-500 shadow-sm':'text-slate-400 dark:text-slate-500'}">${t('expense')}</button>
+                        <button onclick="window.app.state.type='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] transition ${s.type==='income'?'bg-white dark:bg-slate-700 text-emerald-500 shadow-sm':'text-slate-400 dark:text-slate-500'}">${t('income')}</button>
                     </div>
-                    <div id="amount-text" class="num-font text-5xl font-bold text-right py-4 text-slate-800 tracking-tighter">$${s.amount}</div>
-                    <input type="text" placeholder="📝 備註..." oninput="window.app.state.note=this.value" value="${s.note}" class="w-full bg-slate-50 rounded-xl py-3 px-4 text-xs font-bold border-none" />
+                    <div id="amount-text" class="num-font text-5xl font-bold text-right py-4 text-slate-800 dark:text-white tracking-tighter">$${s.amount}</div>
+                    <input type="text" placeholder="${t('note_placeholder')}" oninput="window.app.state.note=this.value" value="${s.note}" class="w-full bg-slate-50 dark:bg-slate-800 dark:text-white rounded-xl py-3 px-4 text-xs font-bold border-none outline-none" />
                 </div>
                 <div class="grid grid-cols-4 gap-2">
                     ${['7','8','9','⌫','4','5','6','/','1','2','3','*','0','.','C','-'].map(b=>`<button onclick="window.app.handleCalc('${b}')" class="calc-btn h-14 bg-white rounded-xl font-bold text-lg text-slate-600 shadow-sm">${b}</button>`).join('')}
-                    <button onclick="window.app.handleCalc('+')" class="calc-btn h-14 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xl">+</button>
-                    <button onclick="window.app.handleCalc('=')" class="calc-btn h-14 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xl">=</button>
-                    <button onclick="window.app.state.homeStep=2; window.app.render();" class="col-span-2 h-14 bg-indigo-600 text-white rounded-xl font-black shadow-lg">${isEditing ? '下一步 (修改)' : '下一步'}</button>
+                    <button onclick="window.app.handleCalc('+')" class="calc-btn h-14 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xl">+</button>
+                    <button onclick="window.app.handleCalc('=')" class="calc-btn h-14 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xl">=</button>
+                    <button onclick="window.app.state.homeStep=2; window.app.render();" class="col-span-2 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black shadow-lg">${isEditing ? t('next_edit') : t('next')}</button>
                 </div>
             ` : `
-                <button onclick="window.app.state.homeStep=1; window.app.render();" class="flex items-center gap-1 text-indigo-600 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回金額</button>
-                ${isEditing ? '<div class="mb-4 text-center"><span class="text-[10px] font-black text-amber-500 bg-amber-100 px-3 py-1 rounded-full">請選擇新類別 (或保持原樣)</span></div>' : ''}
+                <button onclick="window.app.state.homeStep=1; window.app.render();" class="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> ${t('back_amount')}</button>
+                ${isEditing ? `<div class="mb-4 text-center"><span class="text-[10px] font-black text-amber-500 bg-amber-100 dark:bg-amber-900/30 px-3 py-1 rounded-full">${t('select_cat_edit')}</span></div>` : ''}
                 <div class="grid grid-cols-3 gap-3 mb-6">
                     ${cats.map(c=>`
-                        <button onclick="window.app.state.selectedMainCat=${JSON.stringify(c).replace(/"/g, '&quot;')}; window.app.render();" class="p-4 rounded-3xl border-2 transition flex flex-col items-center gap-1 ${s.selectedMainCat?.id===c.id?'border-indigo-600 bg-indigo-50':'border-transparent bg-white shadow-sm'}">
+                        <button onclick="window.app.state.selectedMainCat=${JSON.stringify(c).replace(/"/g, '&quot;')}; window.app.render();" class="p-4 rounded-3xl border-2 transition flex flex-col items-center gap-1 ${s.selectedMainCat?.id===c.id?'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-500':'border-transparent bg-white dark:bg-darkcard shadow-sm'}">
                             <span class="text-3xl">${c.icon}</span>
-                            <span class="text-[10px] font-bold text-slate-500">${c.name}</span>
+                            <span class="text-[10px] font-bold text-slate-500 dark:text-slate-300">${c.name}</span>
                         </button>`).join('')}
                 </div>
-                ${s.selectedMainCat ? `<div class="bg-slate-900 p-5 rounded-[2.5rem] animate-up grid grid-cols-2 gap-2">
+                ${s.selectedMainCat ? `<div class="bg-slate-900 dark:bg-slate-800 p-5 rounded-[2.5rem] animate-up grid grid-cols-2 gap-2">
                     ${s.selectedMainCat.subCategories.map(sub => {
                         const isCurrentSub = s.editingTxId && s.editingSubCat === sub;
                         const btnClass = isCurrentSub 
@@ -394,7 +567,7 @@
                     enableTime: true,
                     dateFormat: "Y-m-d H:i",
                     defaultDate: s.selectedDate,
-                    locale: "zh_tw",
+                    locale: s.lang === 'zh-TW' ? "zh_tw" : (s.lang === 'ja' ? 'ja' : 'en'),
                     disableMobile: true,
                     onChange: function(selectedDates, dateStr, instance) {
                         window.app.state.selectedDate = getLocalISOString(selectedDates[0]);
@@ -405,63 +578,67 @@
         },
 
         getMonthSelectorHTML() {
-            const dateStr = this.state.viewDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' });
+            const dateStr = this.state.viewDate.toLocaleDateString(
+                this.state.lang === 'zh-TW' ? 'zh-TW' : (this.state.lang === 'ja' ? 'ja-JP' : 'en-US'), 
+                { year: 'numeric', month: 'long' }
+            );
             return `
-            <div class="flex-1 flex items-center justify-between bg-white p-2 rounded-xl shadow-sm border border-slate-100">
+            <div class="flex-1 flex items-center justify-between bg-white dark:bg-darkcard p-2 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                 <button onclick="window.app.changeMonth(-1)" class="p-2 text-slate-400 hover:text-indigo-600"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
-                <span class="font-black text-slate-700 text-sm tracking-widest">${dateStr}</span>
+                <span class="font-black text-slate-700 dark:text-slate-200 text-sm tracking-widest">${dateStr}</span>
                 <button onclick="window.app.changeMonth(1)" class="p-2 text-slate-400 hover:text-indigo-600"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
             </div>`;
         },
 
         renderHistory(container) {
+            const t = (k) => this.t(k);
             const filtered = this.getFilteredTransactions();
             const totalExp = filtered.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
             const totalInc = filtered.filter(t=>t.type==='income').reduce((a,b)=>a+b.amount,0);
 
             container.innerHTML = `
             <div class="flex flex-col h-full animate-up">
-                <div class="p-5 pb-2 shrink-0 z-10 bg-[#f8fafc]">
+                <div class="p-5 pb-2 shrink-0 z-10 bg-[#f8fafc] dark:bg-darkbg">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-black text-slate-800">帳目明細</h2>
-                        <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 shadow-md"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>匯出 XLSX</button>
+                        <h2 class="text-lg font-black text-slate-800 dark:text-white">${t('nav_list')}</h2>
+                        <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 shadow-md hover:bg-emerald-700"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>${t('export')}</button>
                     </div>
                     
                     <div class="flex items-center gap-2 mb-4">
                         ${this.getMonthSelectorHTML()}
-                        <button onclick="window.app.resetDateToNow()" class="w-10 h-10 flex-shrink-0 bg-white rounded-xl shadow-sm border border-slate-100 text-slate-400 flex items-center justify-center hover:text-indigo-600 active:scale-95 transition" title="回到本月">
+                        <button onclick="window.app.resetDateToNow()" class="w-10 h-10 flex-shrink-0 bg-white dark:bg-darkcard rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 text-slate-400 flex items-center justify-center hover:text-indigo-600 dark:hover:text-indigo-400 active:scale-95 transition">
                              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                         </button>
                     </div>
 
                     <div class="flex gap-2 mb-2">
-                        <div class="flex-1 bg-rose-50 p-3 rounded-xl">
-                            <p class="text-[9px] text-rose-400 font-bold mb-1">總支出</p>
-                            <p class="text-lg font-black text-rose-600 num-font">$${totalExp.toLocaleString()}</p>
+                        <div class="flex-1 bg-rose-50 dark:bg-rose-900/20 p-3 rounded-xl">
+                            <p class="text-[9px] text-rose-400 font-bold mb-1">${t('total_exp')}</p>
+                            <p class="text-lg font-black text-rose-600 dark:text-rose-400 num-font">$${totalExp.toLocaleString()}</p>
                         </div>
-                        <div class="flex-1 bg-emerald-50 p-3 rounded-xl">
-                            <p class="text-[9px] text-emerald-400 font-bold mb-1">總收入</p>
-                            <p class="text-lg font-black text-emerald-600 num-font">$${totalInc.toLocaleString()}</p>
+                        <div class="flex-1 bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-xl">
+                            <p class="text-[9px] text-emerald-400 font-bold mb-1">${t('total_inc')}</p>
+                            <p class="text-lg font-black text-emerald-600 dark:text-emerald-400 num-font">$${totalInc.toLocaleString()}</p>
                         </div>
                     </div>
                 </div>
 
                 <div class="flex-1 overflow-y-auto p-5 pt-2 pb-24 no-scrollbar">
                     <div class="space-y-2">
-                        ${filtered.length === 0 ? `<div class="text-center py-10 text-slate-300 text-xs font-bold">本月無資料</div>` : 
+                        ${filtered.length === 0 ? `<div class="text-center py-10 text-slate-300 dark:text-slate-600 text-xs font-bold">${t('no_data')}</div>` : 
                         filtered.map(t=>`
-                            <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
+                            <div class="bg-white dark:bg-darkcard p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100 dark:border-slate-700">
                                 <div>
-                                    <div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-sm">${t.subCat}</span><span class="text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded font-bold">${t.mainCatName}</span></div>
+                                    <div class="flex items-center gap-2"><span class="font-bold text-slate-800 dark:text-slate-200 text-sm">${t.subCat}</span><span class="text-[8px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-400 rounded font-bold">${t.mainCatName}</span></div>
                                     <p class="text-[9px] text-indigo-400 font-bold num-font mt-1">${t.dateString} ${t.timeString}</p>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <div class="text-right mr-2">
                                         <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.type==='income'?'+':'-'}${t.amount.toLocaleString()}</p>
-                                        <p class="text-[8px] text-zinc-950 italic truncate max-w-[80px]">${t.note || ''}</p>
+                                        <p class="text-[8px] text-zinc-950 dark:text-slate-400 italic truncate max-w-[80px]">${t.note || ''}</p>
                                     </div>
-                                    <button onclick="window.app.editTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
-                                    <button onclick="window.app.deleteTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="window.app.editTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="window.app.deleteTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
                                 </div>
                             </div>`).join('')}
                     </div>
@@ -471,6 +648,7 @@
 
         renderStats(container) {
             const s = this.state;
+            const t = (k) => this.t(k);
             const filtered = this.getFilteredTransactions().filter(t => t.type === s.statsType);
             const total = filtered.reduce((acc, t) => acc + t.amount, 0);
 
@@ -478,32 +656,32 @@
                 const catTxs = filtered.filter(t => t.mainCatName === s.statsDetailCategory);
                 container.innerHTML = `
                 <div class="flex flex-col h-full animate-up">
-                    <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
-                        <button onclick="window.app.state.statsDetailCategory=null; window.app.render();" class="flex items-center gap-1 text-indigo-600 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> 返回圖表</button>
+                    <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] dark:bg-darkbg z-10">
+                        <button onclick="window.app.state.statsDetailCategory=null; window.app.render();" class="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> ${t('back_amount')}</button>
                         <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-lg font-black text-slate-800">${s.statsDetailCategory}</h2>
-                            <span class="num-font font-bold text-slate-500">$${catTxs.reduce((a,b)=>a+b.amount,0).toLocaleString()}</span>
+                            <h2 class="text-lg font-black text-slate-800 dark:text-white">${s.statsDetailCategory}</h2>
+                            <span class="num-font font-bold text-slate-500 dark:text-slate-400">$${catTxs.reduce((a,b)=>a+b.amount,0).toLocaleString()}</span>
                         </div>
                     </div>
                     <div class="flex-1 overflow-y-auto p-5 pt-0 pb-24 no-scrollbar">
                         <div class="space-y-2">
-                            ${catTxs.length === 0 ? `<div class="text-center py-10 text-slate-300 text-xs font-bold">無資料</div>` : 
+                            ${catTxs.length === 0 ? `<div class="text-center py-10 text-slate-300 dark:text-slate-600 text-xs font-bold">${t('no_data')}</div>` : 
                             catTxs.map(t=>`
-                                <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
+                                <div class="bg-white dark:bg-darkcard p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100 dark:border-slate-700">
                                     <div>
                                         <div class="flex items-center gap-2">
-                                            <span class="font-bold text-slate-800 text-sm">${t.subCat}</span>
-                                            <span class="text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded font-bold">${t.mainCatName}</span>
+                                            <span class="font-bold text-slate-800 dark:text-slate-200 text-sm">${t.subCat}</span>
+                                            <span class="text-[8px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-400 rounded font-bold">${t.mainCatName}</span>
                                         </div>
                                         <p class="text-[9px] text-indigo-400 font-bold num-font mt-1">${t.dateString} ${t.timeString}</p>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <div class="text-right mr-2">
                                             <p class="font-black text-base ${t.type==='income'?'text-emerald-500':'text-rose-500'}">${t.amount.toLocaleString()}</p>
-                                            <p class="text-[8px] text-zinc-950 italic truncate max-w-[80px]">${t.note || ''}</p>
+                                            <p class="text-[8px] text-zinc-950 dark:text-slate-400 italic truncate max-w-[80px]">${t.note || ''}</p>
                                         </div>
-                                        <button onclick="window.app.editTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
-                                        <button onclick="window.app.deleteTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                        <button onclick="window.app.editTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                                        <button onclick="window.app.deleteTx('${t.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-400 hover:text-rose-600 hover:bg-rose-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
                                     </div>
                                 </div>`).join('')}
                         </div>
@@ -518,23 +696,23 @@
 
             container.innerHTML = `
             <div class="flex flex-col h-full animate-up">
-                <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
+                <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] dark:bg-darkbg z-10">
                     <div class="flex items-center gap-2 mb-4">
                         ${this.getMonthSelectorHTML()}
-                        <button onclick="window.app.resetDateToNow()" class="w-10 h-10 flex-shrink-0 bg-white rounded-xl shadow-sm border border-slate-100 text-slate-400 flex items-center justify-center hover:text-indigo-600 active:scale-95 transition" title="回到本月">
+                        <button onclick="window.app.resetDateToNow()" class="w-10 h-10 flex-shrink-0 bg-white dark:bg-darkcard rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 text-slate-400 flex items-center justify-center hover:text-indigo-600 dark:hover:text-indigo-400 active:scale-95 transition">
                              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                         </button>
                     </div>
                     
-                    <div class="flex gap-2 mb-4 bg-white p-1 rounded-xl shadow-sm">
-                        <button onclick="window.app.state.statsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.statsType==='expense'?'bg-rose-500 text-white shadow-md':'text-slate-400'}">支出</button>
-                        <button onclick="window.app.state.statsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.statsType==='income'?'bg-emerald-500 text-white shadow-md':'text-slate-400'}">收入</button>
+                    <div class="flex gap-2 mb-4 bg-white dark:bg-darkcard p-1 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                        <button onclick="window.app.state.statsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] transition ${s.statsType==='expense'?'bg-rose-500 text-white shadow-md':'text-slate-400 dark:text-slate-500'}">${t('expense')}</button>
+                        <button onclick="window.app.state.statsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] transition ${s.statsType==='income'?'bg-emerald-500 text-white shadow-md':'text-slate-400 dark:text-slate-500'}">${t('income')}</button>
                     </div>
 
-                    <div class="bg-white p-4 rounded-[2.5rem] shadow-sm border border-slate-100 mb-4 relative">
+                    <div class="bg-white dark:bg-darkcard p-4 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-700 mb-4 relative">
                         <div class="absolute inset-0 flex items-center justify-center pointer-events-none flex-col pt-4">
                             <span class="text-[10px] text-slate-400 font-bold">Total</span>
-                            <span class="text-base font-black text-slate-700 num-font">$${total.toLocaleString()}</span>
+                            <span class="text-base font-black text-slate-700 dark:text-slate-200 num-font">$${total.toLocaleString()}</span>
                         </div>
                         <canvas id="statsChart" class="max-h-[120px]"></canvas>
                     </div>
@@ -542,13 +720,13 @@
 
                 <div class="flex-1 overflow-y-auto p-5 pt-0 pb-24 no-scrollbar">
                     <div class="space-y-4">
-                        ${sorted.length === 0 ? `<div class="text-center py-5 text-slate-300 text-xs font-bold">無數據可分析</div>` :
+                        ${sorted.length === 0 ? `<div class="text-center py-5 text-slate-300 dark:text-slate-600 text-xs font-bold">${t('no_data')}</div>` :
                         sorted.map(([n, v], idx) => `
-                        <div onclick="window.app.state.statsDetailCategory='${n}'; window.app.render();" class="bg-white p-3 rounded-xl border border-slate-50 flex items-center gap-3 active:scale-95 transition cursor-pointer hover:bg-slate-50">
+                        <div onclick="window.app.state.statsDetailCategory='${n}'; window.app.render();" class="bg-white dark:bg-darkcard p-3 rounded-xl border border-slate-50 dark:border-slate-700 flex items-center gap-3 active:scale-95 transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                             <div class="w-3 h-3 rounded-full shrink-0" style="background-color: ${colors[idx % colors.length]}"></div>
                             <div class="flex-1 space-y-1">
-                                <div class="flex justify-between text-[11px] font-black text-slate-600">
-                                    <span>${n} <span class="text-[9px] text-indigo-300 ml-1 font-normal">(點擊查看)</span></span>
+                                <div class="flex justify-between text-[11px] font-black text-slate-600 dark:text-slate-300">
+                                    <span>${n} <span class="text-[9px] text-indigo-300 dark:text-slate-500 ml-1 font-normal">(View)</span></span>
                                     <span>$${v.toLocaleString()}</span>
                                 </div>
                                 <div class="text-[9px] text-slate-400 font-bold text-right">${Math.round(v/total*100)}%</div>
@@ -583,30 +761,31 @@
 
         renderSettings(container) {
             const s = this.state;
+            const t = (k) => this.t(k);
             const cats = s.categories
                 .filter(c => c.type === s.settingsType)
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
 
             container.innerHTML = `
                 <div class="flex flex-col h-full animate-up">
-                    <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] z-10">
+                    <div class="p-5 pb-2 shrink-0 bg-[#f8fafc] dark:bg-darkbg z-10">
                         <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-lg font-black text-slate-800">分類管理</h2>
-                            <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><i data-lucide="plus" class="w-5 h-5"></i></button>
+                            <h2 class="text-lg font-black text-slate-800 dark:text-white">${t('cat_mgmt')}</h2>
+                            <button onclick="window.app.state.isAdding=true; window.app.state.editingCatId=null; window.app.render();" class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg hover:bg-indigo-700"><i data-lucide="plus" class="w-5 h-5"></i></button>
                         </div>
 
-                        <div class="flex gap-2 mb-4 bg-white p-1 rounded-xl shadow-sm border border-slate-100">
-                            <button onclick="window.app.state.settingsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.settingsType==='expense'?'bg-rose-50 text-rose-600 shadow-sm ring-1 ring-rose-100':'text-slate-400 hover:bg-slate-50'}">支出項目</button>
-                            <button onclick="window.app.state.settingsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] ${s.settingsType==='income'?'bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-emerald-100':'text-slate-400 hover:bg-slate-50'}">收入項目</button>
+                        <div class="flex gap-2 mb-4 bg-white dark:bg-darkcard p-1 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                            <button onclick="window.app.state.settingsType='expense'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] transition ${s.settingsType==='expense'?'bg-rose-50 dark:bg-rose-900/30 text-rose-600 shadow-sm ring-1 ring-rose-100 dark:ring-rose-800':'text-slate-400 dark:text-slate-500 hover:bg-slate-50'}">${t('expense')}</button>
+                            <button onclick="window.app.state.settingsType='income'; window.app.render();" class="flex-1 py-2 rounded-lg font-bold text-[10px] transition ${s.settingsType==='income'?'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 shadow-sm ring-1 ring-emerald-100 dark:ring-emerald-800':'text-slate-400 dark:text-slate-500 hover:bg-slate-50'}">${t('income')}</button>
                         </div>
 
-                        ${s.isAdding ? `<div class="bg-white p-5 rounded-[2rem] shadow-xl border border-indigo-50 mb-4 space-y-4 animate-up relative z-20">
-                            <div class="flex gap-3"><input id="new-cat-icon" placeholder="圖示" class="w-16 bg-slate-50 p-3 rounded-xl text-center text-xl" maxlength="2"/><input id="new-cat-name" placeholder="名稱" class="flex-1 bg-slate-50 p-3 rounded-xl text-xs font-bold"/></div>
-                            <div class="text-[10px] font-bold text-slate-400 pl-1">類別：${s.settingsType==='expense'?'支出':'收入'}</div>
-                            <input id="new-cat-subs" placeholder="子類別 (以逗號隔開)" class="w-full bg-slate-50 p-3 rounded-xl text-xs font-bold"/>
+                        ${s.isAdding ? `<div class="bg-white dark:bg-darkcard p-5 rounded-[2rem] shadow-xl border border-indigo-50 dark:border-slate-600 mb-4 space-y-4 animate-up relative z-20">
+                            <div class="flex gap-3"><input id="new-cat-icon" placeholder="${t('cat_icon')}" class="w-16 bg-slate-50 dark:bg-slate-700 dark:text-white p-3 rounded-xl text-center text-xl" maxlength="2"/><input id="new-cat-name" placeholder="${t('cat_name')}" class="flex-1 bg-slate-50 dark:bg-slate-700 dark:text-white p-3 rounded-xl text-xs font-bold"/></div>
+                            <div class="text-[10px] font-bold text-slate-400 pl-1">${s.settingsType==='expense'? t('expense') : t('income')}</div>
+                            <input id="new-cat-subs" placeholder="${t('cat_subs')}" class="w-full bg-slate-50 dark:bg-slate-700 dark:text-white p-3 rounded-xl text-xs font-bold"/>
                             <div class="flex gap-2 pt-2">
-                                <button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs">儲存</button>
-                                <button onclick="window.app.state.isAdding=false; window.app.state.editingCatId=null; window.app.render();" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-bold text-xs">取消</button>
+                                <button onclick="window.app.saveCategory()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold text-xs">${t('save')}</button>
+                                <button onclick="window.app.state.isAdding=false; window.app.state.editingCatId=null; window.app.render();" class="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 py-3 rounded-xl font-bold text-xs">${t('cancel')}</button>
                             </div>
                         </div>` : ''}
                     </div>
@@ -614,11 +793,11 @@
                     <div class="flex-1 overflow-y-auto p-5 pt-0 pb-24 no-scrollbar">
                         <div id="sortable-list" class="space-y-2">
                             ${cats.map(c => `
-                                <div data-id="${c.id}" class="bg-white p-3 pr-4 rounded-2xl flex items-center shadow-sm border border-slate-50 cursor-pointer group select-none">
-                                    <div class="drag-handle px-3 text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-500"><i data-lucide="grip-vertical" class="w-5 h-5"></i></div>
+                                <div data-id="${c.id}" class="bg-white dark:bg-darkcard p-3 pr-4 rounded-2xl flex items-center shadow-sm border border-slate-50 dark:border-slate-700 cursor-pointer group select-none">
+                                    <div class="drag-handle px-3 text-slate-300 dark:text-slate-600 cursor-grab active:cursor-grabbing hover:text-slate-500"><i data-lucide="grip-vertical" class="w-5 h-5"></i></div>
                                     <div onclick="window.app.editCat('${c.id}')" class="flex-1 flex items-center gap-4">
                                         <span class="text-2xl">${c.icon}</span>
-                                        <p class="font-bold text-sm text-slate-700">${c.name}</p>
+                                        <p class="font-bold text-sm text-slate-700 dark:text-slate-200">${c.name}</p>
                                     </div>
                                     <button onclick="window.app.deleteCat('${c.id}')" class="text-slate-400 hover:text-rose-500 p-2 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                 </div>`).join('')}
@@ -640,11 +819,10 @@
 
             const list = document.getElementById('sortable-list');
             if (list) {
-                // ★★★ SortableJS 設定：減慢動畫速度以增加推開感 ★★★
                 new Sortable(list, {
                     handle: '.drag-handle',
-                    animation: 350,       // ★★★ 關鍵：調到 350ms，讓推開的動作更明顯 ★★★
-                    swapThreshold: 0.65,  // 避免太靈敏
+                    animation: 350,
+                    swapThreshold: 0.65,
                     forceFallback: true, 
                     fallbackOnBody: true,
                     scroll: true,
@@ -715,8 +893,8 @@
             this.render();
         },
 
-        async deleteCat(id) { if (confirm('刪除分類？')) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id)); },
-        async deleteTx(id) { if (confirm('刪除此帳目？')) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'transactions', id)); }
+        async deleteCat(id) { if (confirm(this.t('delete_cat_confirm'))) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'categories', id)); },
+        async deleteTx(id) { if (confirm(this.t('delete_tx_confirm'))) await deleteDoc(doc(db, 'artifacts', appId, 'users', this.state.user.uid, 'transactions', id)); }
     };
 
     onAuthStateChanged(auth, async (user) => {
@@ -725,6 +903,10 @@
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('app-content').classList.remove('hidden');
             document.getElementById('user-display').innerText = user.email;
+            
+            // Apply theme on load
+            window.app.applyTheme();
+
             unsubTx = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), snap => { window.app.state.transactions = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>b.timestamp-a.timestamp); window.app.render(); });
             unsubCat = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'categories'), snap => { window.app.state.categories = snap.docs.map(d => ({ id: d.id, ...d.data() })); window.app.render(); });
         } else {
@@ -735,7 +917,6 @@
     });
 
     document.getElementById('google-login-btn').onclick = () => signInWithPopup(auth, provider);
-    document.getElementById('logout-btn').onclick = () => signOut(auth);
     lucide.createIcons();
 </script>
 </body>
