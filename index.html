@@ -30,20 +30,8 @@
         .num-font { font-family: 'JetBrains Mono', monospace; }
         .glass-effect { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
         
-        .app-container { 
-            height: 100dvh; 
-            display: flex; 
-            flex-direction: column; 
-            position: relative;
-        }
-        
-        .content-area { 
-            flex: 1; 
-            overflow: hidden; 
-            position: relative;
-            display: flex;
-            flex-direction: column;
-        }
+        .app-container { height: 100dvh; display: flex; flex-direction: column; position: relative; }
+        .content-area { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; }
         
         .calc-btn { transition: transform 0.05s ease; border: 1px solid rgba(0,0,0,0.03); display: flex; align-items: center; justify-content: center; }
         .calc-btn:active { transform: scale(0.92); background-color: #e2e8f0; }
@@ -55,56 +43,50 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
         /* ========================================= */
-        /* ★★★ 拖曳手感優化核心 CSS (修改區) ★★★ */
+        /* ★★★ 拖曳視覺優化核心 (Modified) ★★★ */
         /* ========================================= */
 
-        /* 1. Ghost: 這是「坑」，也就是項目離開原本位置後留下的空位 */
+        /* 1. Ghost (原本位置的坑): 變成一個純粹的虛線框凹槽，隱藏內部內容 */
         .sortable-ghost { 
-            opacity: 0.4 !important; 
-            background: #e0e7ff !important; 
-            border: 2px dashed #818cf8 !important;
+            opacity: 1 !important;
+            background-color: #f1f5f9 !important; /* 淺灰背景 */
+            border: 2px dashed #cbd5e1 !important; /* 虛線框 */
             box-shadow: none !important;
         }
-
-        /* 2. Drag: 這是「原本的實體」，正在被拖曳時，它應該要隱藏 */
-        /* ★★★ 關鍵：設為 opacity: 0，否則你會看到它卡在原地 ★★★ */
-        .sortable-drag { 
-            opacity: 0 !important; 
-        } 
         
-        /* 3. Fallback: 這是「跟著手指動的替身」 */
-        /* ★★★ 關鍵：給它強烈的陰影和白底，讓它看起來是「浮起來的」 ★★★ */
+        /* ★★★ 關鍵：讓坑裡面的文字和圖示消失，只剩下坑本身 ★★★ */
+        .sortable-ghost * { 
+            opacity: 0 !important; 
+            visibility: hidden !important;
+        }
+
+        /* 2. Drag (原生拖曳元素): 隱藏，完全交給 Fallback 接管 */
+        .sortable-drag { opacity: 0 !important; } 
+
+        /* 3. Fallback (手指上的牌): 實體化，浮起來 */
         .sortable-fallback { 
             opacity: 1 !important; 
             background: #ffffff !important; 
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important; /* 強烈陰影 */
-            transform: scale(1.02) rotate(2deg) !important; /* 微微放大並傾斜，增加手感 */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+            transform: scale(1.05); /* 稍微放大一點，強調被抓起來的感覺 */
             border-radius: 1rem !important;
             border: 1px solid #e2e8f0 !important;
             cursor: grabbing !important;
-            pointer-events: none; /* 讓事件穿透，避免卡頓 */
-            z-index: 9999 !important;
+            pointer-events: none;
+            z-index: 10000 !important; /* 確保在最上層 */
         }
 
-        /* 把手區域優化 */
         .drag-handle {
-            touch-action: none; /* 禁止瀏覽器捲動 */
+            touch-action: none; 
             cursor: grab;
-            padding: 12px; /* 增加觸控面積 */
+            padding: 12px;
             margin: -12px 0;
             color: #cbd5e1;
         }
-        .drag-handle:active { cursor: grabbing; color: #6366f1; }
+        .drag-handle:active { color: #6366f1; }
 
-        /* Flatpickr 樣式 */
-        .flatpickr-calendar { 
-            border-radius: 16px !important; 
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important; 
-            border: none !important; 
-            font-family: 'Noto Sans TC', sans-serif !important;
-        }
+        .flatpickr-calendar { border-radius: 16px !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important; border: none !important; font-family: 'Noto Sans TC', sans-serif !important; }
         .flatpickr-day.selected { background: #4f46e5 !important; border-color: #4f46e5 !important; }
-        .flatpickr-time input:hover, .flatpickr-time .flatpickr-am-pm:hover, .flatpickr-time input:focus, .flatpickr-time .flatpickr-am-pm:focus { background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -632,7 +614,7 @@
                     <div class="flex-1 overflow-y-auto p-5 pt-0 pb-24 no-scrollbar">
                         <div id="sortable-list" class="space-y-2">
                             ${cats.map(c => `
-                                <div data-id="${c.id}" class="bg-white p-3 pr-4 rounded-2xl flex items-center shadow-sm border border-slate-50 cursor-pointer active:scale-[0.99] transition group select-none">
+                                <div data-id="${c.id}" class="bg-white p-3 pr-4 rounded-2xl flex items-center shadow-sm border border-slate-50 cursor-pointer group select-none">
                                     <div class="drag-handle px-3 text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-500"><i data-lucide="grip-vertical" class="w-5 h-5"></i></div>
                                     <div onclick="window.app.editCat('${c.id}')" class="flex-1 flex items-center gap-4">
                                         <span class="text-2xl">${c.icon}</span>
@@ -658,17 +640,19 @@
 
             const list = document.getElementById('sortable-list');
             if (list) {
+                // ★★★ SortableJS 設定：減慢動畫速度以增加推開感 ★★★
                 new Sortable(list, {
                     handle: '.drag-handle',
-                    animation: 250,
-                    forceFallback: true, // 保持開啟
+                    animation: 350,       // ★★★ 關鍵：調到 350ms，讓推開的動作更明顯 ★★★
+                    swapThreshold: 0.65,  // 避免太靈敏
+                    forceFallback: true, 
                     fallbackOnBody: true,
                     scroll: true,
                     scrollSensitivity: 30,
                     scrollSpeed: 10,
                     delay: 0,
                     ghostClass: 'sortable-ghost',
-                    dragClass: 'sortable-drag', // 對應 CSS 的 .sortable-drag
+                    dragClass: 'sortable-drag',
                     onChoose: function() { navigator.vibrate && navigator.vibrate(50); }, 
                     onEnd: function (evt) {
                         window.app.updateCategoryOrder();
