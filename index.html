@@ -942,14 +942,16 @@
         const validKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '+', '-', '*', '/'];
 
         if (validKeys.includes(key)) {
+            e.preventDefault(); // 阻止按鍵的預設行為（防止輸入干擾）
             window.app.handleCalc(key);
         } else if (key === 'Backspace') {
+            e.preventDefault();
             window.app.handleCalc('⌫');
         } else if (key === 'Enter' || key === '=') {
-            // Enter 或 = 鍵視為計算結果
+            e.preventDefault(); // 阻擋 Enter 鍵去點擊畫面上殘留焦點的按鈕
             window.app.handleCalc('=');
         } else if (key === 'Escape' || key.toLowerCase() === 'c') {
-            // Esc 或 C 鍵視為清除 (C)
+            e.preventDefault();
             window.app.handleCalc('C');
         }
     });
