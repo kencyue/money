@@ -921,6 +921,39 @@
     });
 
     document.getElementById('google-login-btn').onclick = () => signInWithPopup(auth, provider);
+
+// -----------------------------------------
+    // 加入實體鍵盤支援
+    // -----------------------------------------
+    window.addEventListener('keydown', (e) => {
+        // 1. 如果目前游標停留在任何輸入框（例如正在打備註），則不觸發計算機快捷鍵
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+            return;
+        }
+
+        // 2. 確保只有在「記帳」頁面且為步驟 1（輸入金額的畫面）時，才允許鍵盤輸入
+        if (window.app.state.activeTab !== 'home' || window.app.state.homeStep !== 1) {
+            return;
+        }
+
+        const key = e.key;
+        
+        // 定義允許直接輸入的按鍵
+        const validKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '+', '-', '*', '/'];
+
+        if (validKeys.includes(key)) {
+            window.app.handleCalc(key);
+        } else if (key === 'Backspace') {
+            window.app.handleCalc('⌫');
+        } else if (key === 'Enter' || key === '=') {
+            // Enter 或 = 鍵視為計算結果
+            window.app.handleCalc('=');
+        } else if (key === 'Escape' || key.toLowerCase() === 'c') {
+            // Esc 或 C 鍵視為清除 (C)
+            window.app.handleCalc('C');
+        }
+    });
+    
     lucide.createIcons();
 </script>
 </body>
