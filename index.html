@@ -183,7 +183,11 @@
             cat_name: '名稱', cat_icon: '圖示', cat_subs: '子類別 (以逗號隔開)',
             delete_cat_confirm: '刪除分類？', delete_tx_confirm: '刪除此帳目？',
             settings_title: '設定', language: '語言', theme: '網頁色系', theme_default: '預設 (跟隨系統)', theme_dark: '暗色系', theme_light: '亮色系',
-            logout: '登出', settings_back: '返回'
+            logout: '登出', settings_back: '返回',
+            select_main_cat: '請選擇大類別', select_sub_cat: '請選擇小類別', back_to_main: '返回大類別',
+            search: '搜尋', search_placeholder: '搜尋備註 / 分類 / 金額...', search_all_hint: '搜尋範圍：全部紀錄（不限月份）',
+            no_search_result: '找不到符合的紀錄', year_check_title: '日期確認', year_check_msg: '你輸入的年份是',
+            year_check_msg2: '，確定要儲存嗎？', confirm: '確定', year_overview: '年份總覽', clear_search: '清除搜尋'
         },
         'en': {
             app_name: 'Pocket Acc.', login: 'Admin Login', nav_add: 'Add', nav_list: 'List', nav_stats: 'Stats', nav_cats: 'Cats',
@@ -194,7 +198,11 @@
             cat_name: 'Name', cat_icon: 'Icon', cat_subs: 'Sub-cats (comma split)',
             delete_cat_confirm: 'Delete Category?', delete_tx_confirm: 'Delete Transaction?',
             settings_title: 'Settings', language: 'Language', theme: 'Theme', theme_default: 'System', theme_dark: 'Dark', theme_light: 'Light',
-            logout: 'Logout', settings_back: 'Back'
+            logout: 'Logout', settings_back: 'Back',
+            select_main_cat: 'Select a Category', select_sub_cat: 'Select a Sub-category', back_to_main: 'Back to Categories',
+            search: 'Search', search_placeholder: 'Search note / category / amount...', search_all_hint: 'Searching: all records (all dates)',
+            no_search_result: 'No matching records', year_check_title: 'Confirm Date', year_check_msg: 'The year you entered is',
+            year_check_msg2: '. Save anyway?', confirm: 'Confirm', year_overview: 'By Year', clear_search: 'Clear'
         },
         'ja': {
             app_name: 'ポケット家計簿', login: '管理者ログイン', 
@@ -209,7 +217,11 @@
             cat_name: '名前', cat_icon: 'アイコン', cat_subs: 'サブカテゴリ (カンマ区切り)',
             delete_cat_confirm: '削除しますか？', delete_tx_confirm: '削除しますか？',
             settings_title: '設定', language: '言語', theme: 'テーマ', theme_default: 'システム', theme_dark: 'ダーク', theme_light: 'ライト',
-            logout: 'ログアウト', settings_back: '戻る'
+            logout: 'ログアウト', settings_back: '戻る',
+            select_main_cat: '大カテゴリを選択', select_sub_cat: '小カテゴリを選択', back_to_main: '大カテゴリに戻る',
+            search: '検索', search_placeholder: 'メモ / カテゴリ / 金額を検索...', search_all_hint: '検索範囲：全期間（月に関係なく）',
+            no_search_result: '該当するデータがありません', year_check_title: '日付確認', year_check_msg: '入力された年は',
+            year_check_msg2: '。保存しますか？', confirm: '確定', year_overview: '年別表示', clear_search: 'クリア'
         }
     };
 
@@ -235,7 +247,10 @@
             editingSubCat: null,
             // ★★★ 2. 設定狀態 ★★★
             lang: localStorage.getItem('pocket_lang') || 'zh-TW',
-            theme: localStorage.getItem('pocket_theme') || 'default'
+            theme: localStorage.getItem('pocket_theme') || 'default',
+            // ★★★ 3. 搜尋狀態 ★★★
+            searchQuery: '',
+            searchActive: false
         },
 
         // ★★★ 3. 翻譯與主題輔助函式 ★★★
@@ -277,6 +292,8 @@
             this.state.isAdding = false;
             this.state.editingCatId = null;
             this.state.statsDetailCategory = null;
+            this.state.searchActive = false;
+            this.state.searchQuery = '';
             
             if (tab !== 'home' || !this.state.editingTxId) {
                  this.state.editingTxId = null;
@@ -306,6 +323,86 @@
                 const td = new Date(t.timestamp);
                 return td.getFullYear() === y && td.getMonth() === m;
             });
+        },
+
+        // ★★★ 搜尋：跨月份／跨年份搜尋全部紀錄 ★★★
+        toggleSearch() {
+            this.state.searchActive = !this.state.searchActive;
+            if (!this.state.searchActive) this.state.searchQuery = '';
+            this.render();
+            if (this.state.searchActive) {
+                setTimeout(() => { const el = document.getElementById('search-input'); if (el) el.focus(); }, 50);
+            }
+        },
+
+        setSearchQuery(v) {
+            this.state.searchQuery = v;
+            this.renderSearchResults();
+        },
+
+        getSearchResults() {
+            const q = this.state.searchQuery.trim().toLowerCase();
+            if (!q) return [];
+            return this.state.transactions.filter(t => {
+                return (t.note && t.note.toLowerCase().includes(q)) ||
+                       (t.mainCatName && t.mainCatName.toLowerCase().includes(q)) ||
+                       (t.subCat && t.subCat.toLowerCase().includes(q)) ||
+                       (String(t.amount).includes(q));
+            }).sort((a,b) => b.timestamp - a.timestamp);
+        },
+
+        // 只重繪搜尋結果區塊，避免整頁重刷造成輸入框失焦
+        renderSearchResults() {
+            const box = document.getElementById('search-results');
+            if (!box) return;
+            const t = (k) => this.t(k);
+            const results = this.getSearchResults();
+            if (!this.state.searchQuery.trim()) {
+                box.innerHTML = `<div class="text-center py-8 text-slate-300 dark:text-slate-600 text-[11px] font-bold">${t('search_all_hint')}</div>`;
+                return;
+            }
+            if (results.length === 0) {
+                box.innerHTML = `<div class="text-center py-8 text-slate-300 dark:text-slate-600 text-xs font-bold">${t('no_search_result')}</div>`;
+                return;
+            }
+            box.innerHTML = results.map(tx => `
+                <div class="bg-white dark:bg-darkcard p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100 dark:border-slate-700">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800 dark:text-slate-200 text-sm">${tx.subCat}</span>
+                            <span class="text-[8px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-400 rounded font-bold">${tx.mainCatName}</span>
+                        </div>
+                        <p class="text-[9px] text-indigo-400 font-bold num-font mt-1">${tx.dateString} ${tx.timeString}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="text-right mr-2">
+                            <p class="font-black text-base ${tx.type==='income'?'text-emerald-500':'text-rose-500'}">${tx.type==='income'?'+':'-'}${tx.amount.toLocaleString()}</p>
+                            <p class="text-[8px] text-zinc-950 dark:text-slate-400 italic truncate max-w-[80px]">${tx.note || ''}</p>
+                        </div>
+                        <button onclick="window.app.editTx('${tx.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                        <button onclick="window.app.deleteTx('${tx.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                </div>`).join('');
+            lucide.createIcons();
+        },
+
+        // ★★★ 年份總覽：快速找出被打錯年份的紀錄 ★★★
+        getYearOverview() {
+            const groups = {};
+            this.state.transactions.forEach(t => {
+                const y = new Date(t.timestamp).getFullYear();
+                groups[y] = (groups[y] || 0) + 1;
+            });
+            return Object.entries(groups).sort((a,b) => b[0] - a[0]);
+        },
+
+        jumpToYear(year) {
+            const d = new Date(this.state.viewDate);
+            d.setFullYear(parseInt(year));
+            this.state.viewDate = d;
+            this.state.searchActive = false;
+            this.state.searchQuery = '';
+            this.render();
         },
 
         render() {
@@ -447,6 +544,8 @@
             s.selectedMainCat = cat || null;
             s.homeStep = 1;
             s.activeTab = 'home';
+            s.searchActive = false;
+            s.searchQuery = '';
             this.render();
         },
 
@@ -456,11 +555,40 @@
             this.state.note = '';
             this.state.selectedMainCat = null;
             this.state.selectedDate = getLocalISOString(new Date());
+            this.state.homeStep = 1;
+            this.render();
+        },
+
+        // ★★★ 選大類別後，進入小類別頁 ★★★
+        selectMainCat(cat) {
+            this.state.selectedMainCat = cat;
+            this.state.homeStep = 3;
+            this.render();
+        },
+
+        goToCatStep() {
+            this.state.homeStep = 2;
+            this.render();
+        },
+
+        backToMainCatStep() {
+            this.state.homeStep = 2;
+            this.state.selectedMainCat = null;
             this.render();
         },
 
         async saveRecord(sub) {
             const s = this.state;
+
+            // ★★★ 日期年份健檢：避免不小心打錯年份 ★★★
+            const recordDateCheck = new Date(s.selectedDate);
+            const nowYear = new Date().getFullYear();
+            if (Math.abs(recordDateCheck.getFullYear() - nowYear) >= 1) {
+                const t = (k) => this.t(k);
+                const ok = confirm(`${t('year_check_msg')} ${recordDateCheck.getFullYear()} ${t('year_check_msg2')}`);
+                if (!ok) return;
+            }
+
             const collectionRef = collection(db, 'artifacts', appId, 'users', s.user.uid, 'transactions');
             const recordDate = new Date(s.selectedDate);
             
@@ -510,7 +638,10 @@
             const isEditing = !!s.editingTxId;
             const displayDate = s.selectedDate.replace('T', ' ');
 
-            const inner = s.homeStep === 1 ? `
+            let inner = '';
+
+            if (s.homeStep === 1) {
+                inner = `
                 <div class="bg-white dark:bg-darkcard rounded-[2rem] p-5 shadow-sm border ${isEditing ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-100 dark:border-slate-700'} mb-4 transition-colors">
                     
                     <div class="flex justify-between items-center mb-2">
@@ -541,19 +672,34 @@
                     ${['7','8','9','⌫','4','5','6','/','1','2','3','*','0','.','C','-'].map(b=>`<button onclick="window.app.handleCalc('${b}')" class="calc-btn h-14 bg-white rounded-xl font-bold text-lg text-slate-600 shadow-sm">${b}</button>`).join('')}
                     <button onclick="window.app.handleCalc('+')" class="calc-btn h-14 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xl">+</button>
                     <button onclick="window.app.handleCalc('=')" class="calc-btn h-14 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xl">=</button>
-                    <button onclick="window.app.state.homeStep=2; window.app.render();" class="col-span-2 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black shadow-lg">${isEditing ? t('next_edit') : t('next')}</button>
+                    <button onclick="window.app.goToCatStep()" class="col-span-2 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black shadow-lg">${isEditing ? t('next_edit') : t('next')}</button>
                 </div>
-            ` : `
+                `;
+            } else if (s.homeStep === 2) {
+                // ★★★ 步驟 2：只顯示大類別 ★★★
+                inner = `
                 <button onclick="window.app.state.homeStep=1; window.app.render();" class="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> ${t('back_amount')}</button>
-                ${isEditing ? `<div class="mb-4 text-center"><span class="text-[10px] font-black text-amber-500 bg-amber-100 dark:bg-amber-900/30 px-3 py-1 rounded-full">${t('select_cat_edit')}</span></div>` : ''}
+                <div class="mb-4 text-center">
+                    <span class="text-[10px] font-black ${isEditing ? 'text-amber-500 bg-amber-100 dark:bg-amber-900/30' : 'text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'} px-3 py-1 rounded-full">${isEditing ? t('select_cat_edit') : t('select_main_cat')}</span>
+                </div>
                 <div class="grid grid-cols-3 gap-3 mb-6">
                     ${cats.map(c=>`
-                        <button onclick="window.app.state.selectedMainCat=${JSON.stringify(c).replace(/"/g, '&quot;')}; window.app.render();" class="p-4 rounded-3xl border-2 transition flex flex-col items-center gap-1 ${s.selectedMainCat?.id===c.id?'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-500':'border-transparent bg-white dark:bg-darkcard shadow-sm'}">
+                        <button onclick='window.app.selectMainCat(${JSON.stringify(c).replace(/"/g, '&quot;')})' class="p-4 rounded-3xl border-2 transition flex flex-col items-center gap-1 ${s.selectedMainCat?.id===c.id?'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-500':'border-transparent bg-white dark:bg-darkcard shadow-sm'}">
                             <span class="text-3xl">${c.icon}</span>
                             <span class="text-[10px] font-bold text-slate-500 dark:text-slate-300">${c.name}</span>
                         </button>`).join('')}
                 </div>
-                ${s.selectedMainCat ? `<div class="bg-slate-900 dark:bg-slate-800 p-5 rounded-[2.5rem] animate-up grid grid-cols-2 gap-2">
+                `;
+            } else if (s.homeStep === 3 && s.selectedMainCat) {
+                // ★★★ 步驟 3：只顯示小類別 ★★★
+                inner = `
+                <button onclick="window.app.backToMainCatStep()" class="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold mb-5 text-sm"><i data-lucide="chevron-left" class="w-4 h-4"></i> ${t('back_to_main')}</button>
+                <div class="flex items-center justify-center gap-2 mb-6">
+                    <span class="text-3xl">${s.selectedMainCat.icon}</span>
+                    <span class="text-lg font-black text-slate-700 dark:text-white">${s.selectedMainCat.name}</span>
+                </div>
+                ${isEditing ? `<div class="mb-4 text-center"><span class="text-[10px] font-black text-amber-500 bg-amber-100 dark:bg-amber-900/30 px-3 py-1 rounded-full">${t('select_sub_cat')}</span></div>` : `<div class="mb-4 text-center"><span class="text-[10px] font-black text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full">${t('select_sub_cat')}</span></div>`}
+                <div class="bg-slate-900 dark:bg-slate-800 p-5 rounded-[2.5rem] animate-up grid grid-cols-2 gap-2">
                     ${s.selectedMainCat.subCategories.map(sub => {
                         const isCurrentSub = s.editingTxId && s.editingSubCat === sub;
                         const btnClass = isCurrentSub 
@@ -561,8 +707,9 @@
                             : "bg-white/10 text-white hover:bg-white/20";
                         return `<button onclick="window.app.saveRecord('${sub}')" class="py-3 rounded-xl font-bold text-[11px] transition-all ${btnClass}">${sub}</button>`;
                     }).join('')}
-                </div>` : ''}
-            `;
+                </div>
+                `;
+            }
 
             container.innerHTML = `<div class="flex-1 overflow-y-auto p-5 animate-up pb-24">${inner}</div>`;
 
@@ -596,6 +743,37 @@
 
         renderHistory(container) {
             const t = (k) => this.t(k);
+            const s = this.state;
+
+            // ★★★ 搜尋模式畫面 ★★★
+            if (s.searchActive) {
+                container.innerHTML = `
+                <div class="flex flex-col h-full animate-up">
+                    <div class="p-5 pb-2 shrink-0 z-10 bg-[#f8fafc] dark:bg-darkbg">
+                        <div class="flex items-center gap-2 mb-4">
+                            <button onclick="window.app.toggleSearch()" class="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300"><i data-lucide="arrow-left" class="w-4 h-4"></i></button>
+                            <div class="flex-1 relative">
+                                <input id="search-input" type="text" placeholder="${t('search_placeholder')}" value="${s.searchQuery}" oninput="window.app.setSearchQuery(this.value)" class="w-full bg-white dark:bg-darkcard dark:text-white rounded-xl py-3 pl-10 pr-4 text-xs font-bold border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-400" />
+                                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <p class="text-[9px] font-bold text-slate-400 mb-2 flex items-center gap-1"><i data-lucide="calendar-range" class="w-3 h-3"></i>${t('year_overview')}</p>
+                            <div class="flex gap-2 flex-wrap">
+                                ${this.getYearOverview().map(([y,c]) => `<button onclick="window.app.jumpToYear('${y}')" class="px-3 py-1.5 bg-white dark:bg-darkcard border border-slate-200 dark:border-slate-700 rounded-full text-[10px] font-bold text-slate-500 dark:text-slate-300 hover:border-indigo-400 hover:text-indigo-600">${y} <span class="text-slate-300 dark:text-slate-600">(${c})</span></button>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-5 pt-2 pb-24 no-scrollbar">
+                        <div id="search-results" class="space-y-2"></div>
+                    </div>
+                </div>`;
+                this.renderSearchResults();
+                lucide.createIcons();
+                return;
+            }
+
             const filtered = this.getFilteredTransactions();
             const totalExp = filtered.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
             const totalInc = filtered.filter(t=>t.type==='income').reduce((a,b)=>a+b.amount,0);
@@ -605,7 +783,10 @@
                 <div class="p-5 pb-2 shrink-0 z-10 bg-[#f8fafc] dark:bg-darkbg">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-lg font-black text-slate-800 dark:text-white">${t('nav_list')}</h2>
-                        <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 shadow-md hover:bg-emerald-700"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>${t('export')}</button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="window.app.toggleSearch()" class="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 p-2 rounded-lg hover:text-indigo-600 dark:hover:text-indigo-400"><i data-lucide="search" class="w-4 h-4"></i></button>
+                            <button onclick="window.app.exportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 shadow-md hover:bg-emerald-700"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>${t('export')}</button>
+                        </div>
                     </div>
                     
                     <div class="flex items-center gap-2 mb-4">
