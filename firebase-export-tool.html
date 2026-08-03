@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>口袋記帳 - 資料匯出工具（僅用一次）</title>
+<style>
+  body { font-family: -apple-system, "Noto Sans TC", sans-serif; background:#0f172a; color:#f8fafc; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:20px; }
+  .card { background:#1e293b; border-radius:24px; padding:32px; max-width:420px; width:100%; text-align:center; }
+  h1 { font-size:18px; margin-bottom:8px; }
+  p { font-size:13px; color:#94a3b8; line-height:1.6; margin-bottom:24px; }
+  button { width:100%; padding:14px; border-radius:14px; border:none; font-weight:900; font-size:14px; cursor:pointer; margin-bottom:10px; }
+  #login-btn { background:#fff; color:#0f172a; }
+  #export-btn { background:#4f46e5; color:#fff; display:none; }
+  #status { font-size:12px; color:#818cf8; margin-top:16px; white-space:pre-wrap; text-align:left; max-height:200px; overflow-y:auto; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📦 口袋記帳 資料匯出工具</h1>
+  <p>這個頁面只用來把 Firebase 上的舊資料，一次性匯出成一個 JSON 備份檔。<br>匯出完成後，把這個檔案透過「設定 → 匯入備份檔」放進新的本機版 App 即可。<br>匯出後可以關掉這個頁面，之後不會再用到。</p>
+  <button id="login-btn">使用管理員帳號登入</button>
+  <button id="export-btn">開始匯出並下載 JSON</button>
+  <div id="status"></div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+  import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+  // 沿用你原本網頁版的 Firebase 設定
+  const firebaseConfig = {
+      apiKey: "AIzaSyAC6VEkioGi-VC8MHXW3-nl4ngWwPRsMyw",
+      authDomain: "money-c5f6e.firebaseapp.com",
+      projectId: "money-c5f6e",
+      storageBucket: "money-c5f6e.firebasestorage.app",
+      messagingSenderId: "965877863338",
+      appId: "1:965877863338:web:59c5078c04bc4c9458d1d3"
+  };
+  const ALLOWED_USER = "jingsyuan@gmail.com";
+  const appId = 'pocket-account-pro-v2';
+
+  const fApp = initializeApp(firebaseConfig);
+  const auth = getAuth(fApp);
+  const db = getFirestore(fApp);
+  const provider = new GoogleAuthProvider();
+
+  const statusEl = document.getElementById('status');
+  const loginBtn = document.getElementById('login-btn');
+  const exportBtn = document.getElementById('export-btn');
+  const log = (msg) => { statusEl.textContent += msg + '\n'; };
+
+  loginBtn.onclick = () => signInWithPopup(auth, provider).catch(e => log('登入失敗: ' + e.message));
+
+  let currentUser = null;
+
+  onAuthStateChanged(auth, (user) => {
+    if (user && user.email === ALLOWED_USER) {
+      currentUser = user;
+      loginBtn.style.display = 'none';
+      exportBtn.style.display = 'block';
+      log(`✅ 已登入：${user.email}`);
+    } else if (user) {
+      log('⚠️ 此帳號無權限');
+    }
+  });
+
+  exportBtn.onclick = async () => {
+    exportBtn.disabled = true;
+    log('讀取交易紀錄中...');
+    try {
+      const txSnap = await getDocs(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'transactions'));
+      const transactions = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      log(`✅ 交易紀錄：共 ${transactions.length} 筆`);
+
+      log('讀取分類設定中...');
+      const catSnap = await getDocs(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'categories'));
+      const categories = catSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      log(`✅ 分類設定：共 ${categories.length} 筆`);
+
+      const exportData = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        transactions,
+        categories
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pocket-account-migration-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      log('\n🎉 匯出完成！檔案已下載。\n請把這個檔案傳到手機（例如用雲端硬碟、AirDrop、Email 都可以），然後在新版 App 的「設定 → 匯入備份檔」選擇這個檔案即可。');
+    } catch (e) {
+      log('❌ 匯出失敗：' + e.message);
+      exportBtn.disabled = false;
+    }
+  };
+</script>
+</body>
+</html>
